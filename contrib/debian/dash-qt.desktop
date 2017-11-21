@@ -1,12 +1,12 @@
 [Desktop Entry]
 Encoding=UTF-8
-Name=Dash
-Comment=Dash P2P Cryptocurrency
-Comment[fr]=Dash, monnaie virtuelle cryptographique pair à pair
-Comment[tr]=Dash, eşten eşe kriptografik sanal para birimi
-Exec=dash-qt %u
+Name=Gridcoin
+Comment=Gridcoin P2P Cryptocurrency
+Comment[fr]=Gridcoin, monnaie virtuelle cryptographique pair à pair
+Comment[tr]=Gridcoin, eşten eşe kriptografik sanal para birimi
+Exec=gridcoin-qt %u
 Terminal=false
 Type=Application
-Icon=dash128
-MimeType=x-scheme-handler/dash;
+Icon=gridcoin128
+MimeType=x-scheme-handler/gridcoin;
 Categories=Office;Finance;

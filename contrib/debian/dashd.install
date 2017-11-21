@@ -1,2 +1,2 @@
-usr/local/bin/dashd usr/bin
-usr/local/bin/dash-cli usr/bin
+usr/local/bin/gridcoind usr/bin
+usr/local/bin/gridcoin-cli usr/bin

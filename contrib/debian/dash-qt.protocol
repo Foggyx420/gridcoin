@@ -1,6 +1,6 @@
 [Protocol]
-exec=dash-qt '%u'
-protocol=dash
+exec=gridcoin-qt '%u'
+protocol=gridcoin
 input=none
 output=none
 helper=true
