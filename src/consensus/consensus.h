@@ -8,7 +8,7 @@
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 // static const unsigned int MAX_BLOCK_SIZE = 1000000;
-static const unsigned int MAX_LEGACY_BLOCK_SIZE = (1 * 1000 * 1000);
+static const unsigned int MAX_LEGACY_BLOCK_SIZE = (3 * 1000 * 1000);
 inline unsigned int MaxBlockSize(bool fDIP0001Active /*= false */)
 {
     return fDIP0001Active ? MAX_LEGACY_BLOCK_SIZE * 2 : MAX_LEGACY_BLOCK_SIZE;

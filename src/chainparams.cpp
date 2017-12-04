@@ -6,20 +6,21 @@
 
 #include "chainparams.h"
 #include "consensus/merkle.h"
-
 #include "tinyformat.h"
 #include "util.h"
 #include "utilstrencodings.h"
 #include "amount.h"
 #include "arith_uint256.h"
+#include "base58.h"
 
 #include <assert.h>
-
 #include <boost/assign/list_of.hpp>
-
 #include "chainparamsseeds.h"
-
-static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesisOutputScript, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
+double ConvertToDouble(std::string s, int place);
+std::vector<std::string> Split(std::string s, std::string delim);
+//static
+CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesisOutputScript, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, 
+	const CAmount& genesisReward, int nNetworkId)
 {
     CMutableTransaction txNew;
     txNew.nVersion = 1;
@@ -32,12 +33,22 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
     CBlock genesis;
     genesis.nTime    = nTime;
     genesis.nBits    = nBits;
-    genesis.nNonce   = nNonce;
     genesis.nVersion = nVersion;
     genesis.vtx.push_back(txNew);
     genesis.hashPrevBlock.SetNull();
     genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
+	genesis.sGRCAddress = "";
 
+	for (int i = nNonce; i < 99999999; i++)
+	{
+		genesis.nNonce = i;
+        arith_uint256 hashTarget = arith_uint256().SetCompact(genesis.nBits);
+		if (UintToArith256(genesis.GetHash()) <= hashTarget)  break;
+	}
+
+	printf("NetworkID %f, Nonce %f, Genesis hash %s , MerkleRoot %s \n",(double)nNetworkId,(double)genesis.nNonce,genesis.GetHash().GetHex().c_str(),
+		genesis.hashMerkleRoot.GetHex().c_str());
+    
 	return genesis;
 }
 
@@ -52,11 +63,11 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
  *     CTxOut(nValue=50.00000000, scriptPubKey=0xA9037BAC7050C479B121CF)
  *   vMerkleTree: e0028e
  */
-static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
+static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward, int iNetworkID)
 {
     const char* pszTimestamp = "The Independent 11/21/17 Elon Musk slams proposal to create an Artificial Intelligence God";
     const CScript genesisOutputScript = CScript() << ParseHex("040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9") << OP_CHECKSIG;
-    return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
+    return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward, iNetworkID);
 }
 
 /**
@@ -91,6 +102,9 @@ public:
         consensus.nMasternodeMinimumConfirmations = 15;
         consensus.nMajorityEnforceBlockUpgrade = 750;
         consensus.nMajorityRejectBlockOutdated = 950;
+		nLastPOWBlock = 200;
+        nMaturity = 50;
+
         consensus.nMajorityWindow = 1000;
         consensus.BIP34Height = 1;
         consensus.BIP34Hash = uint256S("0x000007d91d1254d60e2dd1ae580383070a4ddffa4c64c2eeb4a2f9ecc0414343");
@@ -133,38 +147,30 @@ public:
         pchMessageStart[2] = 0x6b;
         pchMessageStart[3] = 0xbd;
         vAlertPubKey = ParseHex("0x0");
-        nDefaultPort = 32749;
+        nDefaultPort = 32739;
         nMaxTipAge = 6 * 60 * 60; // ~144 blocks behind -> 2 x fork detection time, was 24 * 60 * 60 in bitcoin
         nDelayGetHeadersTime = 24 * 60 * 60;
         nPruneAfterHeight = 100000;
-		int iNonce;
-		for (iNonce=1202280; iNonce < 99999999; iNonce++)
-		{
-		    genesis = CreateGenesisBlock(1511309700, iNonce, 0x1e0ffff0, 1, 50 * COIN);
-            arith_uint256 hashTarget = arith_uint256().SetCompact(genesis.nBits);
-		    if (UintToArith256(genesis.GetHash()) <= hashTarget)  break;
-		}
-        
+		genesis = CreateGenesisBlock(1511309700, 2033640, 0x1e0ffff0, 1, 50 * COIN, 0);
+		 
         consensus.hashGenesisBlock = genesis.GetHash();
-        printf("Genesis Check Main %f \n",(double)iNonce);
-      	printf(" genesis hash %s, MerkleRoot %s \n",genesis.GetHash().GetHex().c_str(),
-        genesis.hashMerkleRoot.GetHex().c_str());
-
-		assert(consensus.hashGenesisBlock == uint256S("0x00000061899035d73876d27df58c26353d2288287259bdd3a88b67cfd4c7c80d"));
-        assert(genesis.hashMerkleRoot == uint256S("0x73aa4bb531dcea1888a3ceaaa0a4d7529d7ad49fd75cf4b941f95cbf7be07b43"));
-
+        
+		assert(consensus.hashGenesisBlock == uint256S("0x00000bbfdb174286fad36fa3e12bc0976c6181bb6fdf7b2a30caacc1b61b04b4"));
+        assert(genesis.hashMerkleRoot == uint256S("0x4442ce0b92014dba69e4c6664ab88081b4d1d2eb6bcafa281f8d712a356011ce"));
 
         vSeeds.push_back(CDNSSeedData("gridcoin.org", "dnsseed.gridcoin.org"));
         vSeeds.push_back(CDNSSeedData("gridcoindot.io", "dnsseed.gridcoindot.io"));
         vSeeds.push_back(CDNSSeedData("masternode.io", "dnsseed.masternode.io"));
         vSeeds.push_back(CDNSSeedData("gridcoin.io", "dnsseed.gridcoin.io"));
 
-        // Gridcoin addresses start with 'X'
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,76);
-        // Gridcoin script addresses start with '7'
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,16);
-        // Gridcoin private keys start with '7' or 'X'
-        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,204);
+        // Gridcoin addresses start with 'R' & 'S'
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,62);
+        // Gridcoin script addresses start with Z
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,85);
+        // Gridcoin private keys start with 'Z'
+        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,128+62);
+
+		
         // Gridcoin BIP32 pubkeys start with 'xpub' (Bitcoin defaults)
         base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x88)(0xB2)(0x1E).convert_to_container<std::vector<unsigned char> >();
         // Gridcoin BIP32 prvkeys start with 'xprv' (Bitcoin defaults)
@@ -252,6 +258,8 @@ public:
 
         // By default assume that the signatures in ancestors of this block are valid.
         consensus.defaultAssumeValid = uint256S("00000ce22113f3eb8636e225d6a1691e132fdd587aed993e1bc9b07a0235eea4"); //4000
+		nLastPOWBlock = 200;
+        nMaturity = 15;
 
         pchMessageStart[0] = 0xce;
         pchMessageStart[1] = 0xe2;
@@ -264,9 +272,9 @@ public:
         nPruneAfterHeight = 1000;
 
         int iNonce;
-		for (iNonce=698440; iNonce < 99999999; iNonce++)
+		for (iNonce=1356250; iNonce < 99999999; iNonce++)
 		{
-		    genesis = CreateGenesisBlock(1511309285, iNonce, 0x1e0ffff0, 1, 50 * COIN);
+		    genesis = CreateGenesisBlock(1511309285, iNonce, 0x1e0ffff0, 1, 50 * COIN, 1);
             arith_uint256 hashTarget = arith_uint256().SetCompact(genesis.nBits);
 		    if (UintToArith256(genesis.GetHash()) <= hashTarget)  break;
 		}
@@ -276,8 +284,8 @@ public:
       	printf("Genesis hash %s, MerkleRoot %s \n",genesis.GetHash().GetHex().c_str(),
         genesis.hashMerkleRoot.GetHex().c_str());
 				
-		assert(consensus.hashGenesisBlock == uint256S("0x000003fff733ecadf05bcc38cbe9439c6f878eefca09a6a6a0317871dbc2e05a"));
-        assert(genesis.hashMerkleRoot == uint256S("0x73aa4bb531dcea1888a3ceaaa0a4d7529d7ad49fd75cf4b941f95cbf7be07b43"));
+		assert(consensus.hashGenesisBlock == uint256S("0x0000094271fd4996a2be9951d2f45b1cf75da8dd59dbba009de2e44d0050843f"));
+        assert(genesis.hashMerkleRoot == uint256S("0x4442ce0b92014dba69e4c6664ab88081b4d1d2eb6bcafa281f8d712a356011ce"));
 
         vFixedSeeds.clear();
         vSeeds.clear();
@@ -373,7 +381,7 @@ public:
 
         // By default assume that the signatures in ancestors of this block are valid.
         consensus.defaultAssumeValid = uint256S("0x00");
-
+		nMaturity = 10;
         pchMessageStart[0] = 0xfc;
         pchMessageStart[1] = 0xc1;
         pchMessageStart[2] = 0xb7;
@@ -386,7 +394,7 @@ public:
         int iNonce;
 		for (iNonce = 0; iNonce < 99999999; iNonce++)
 		{
-		    genesis = CreateGenesisBlock(1511309286, iNonce, 0x207fffff, 1, 50 * COIN);
+		    genesis = CreateGenesisBlock(1511309286, iNonce, 0x207fffff, 1, 50 * COIN, 2);
             arith_uint256 hashTarget = arith_uint256().SetCompact(genesis.nBits);
 		    if (UintToArith256(genesis.GetHash()) <= hashTarget)  break;
 		}
@@ -397,8 +405,8 @@ public:
       	printf("Genesis hash %s, MerkleRoot %s \n",genesis.GetHash().GetHex().c_str(),
         genesis.hashMerkleRoot.GetHex().c_str());
 
-		assert(consensus.hashGenesisBlock == uint256S("0x03d826408a44f22d98a47c29ea69b57b229fa37365fce0cd8588c993d0c1da2b"));
-        assert(genesis.hashMerkleRoot == uint256S("0x73aa4bb531dcea1888a3ceaaa0a4d7529d7ad49fd75cf4b941f95cbf7be07b43"));
+		assert(consensus.hashGenesisBlock == uint256S("0x7a3f5e99157fa06e03c307815ce680a23a4673aa0588c68078f05df88ac56e9b"));
+        assert(genesis.hashMerkleRoot == uint256S("0x4442ce0b92014dba69e4c6664ab88081b4d1d2eb6bcafa281f8d712a356011ce"));
 
         vFixedSeeds.clear(); //! Regtest mode doesn't have any fixed seeds.
         vSeeds.clear();  //! Regtest mode doesn't have any DNS seeds.

@@ -14,6 +14,7 @@
 #include "consensus/validation.h"
 #include "key.h"
 #include "keystore.h"
+#include "kernel.h"
 #include "validation.h"
 #include "net.h"
 #include "policy/policy.h"
@@ -25,6 +26,7 @@
 #include "txmempool.h"
 #include "util.h"
 #include "utilmoneystr.h"
+#include "masternode-payments.h"
 
 #include "governance.h"
 #include "instantx.h"
@@ -956,7 +958,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
                              wtxIn.hashBlock.ToString());
             }
             AddToSpends(hash);
-            for(int i = 0; i < wtx.vout.size(); ++i) {
+            for(int i = 0; i < (int)wtx.vout.size(); ++i) 
+			{
                 if (IsMine(wtx.vout[i]) && !IsSpent(hash, i)) {
                     setWalletUTXO.insert(COutPoint(hash, i));
                 }
@@ -1766,7 +1769,8 @@ bool CWalletTx::RelayWalletTransaction(CConnman* connman, std::string strCommand
             uint256 hash = GetHash();
             LogPrintf("Relaying wtx %s\n", hash.ToString());
 
-            if(strCommand == NetMsgType::TXLOCKREQUEST) {
+            if(strCommand == NetMsgType::TXLOCKREQUEST) 
+			{
                 instantsend.ProcessTxLockRequest(((CTxLockRequest)*this), *connman);
             }
             if (connman) {
@@ -2357,8 +2361,12 @@ CAmount CWallet::GetImmatureWatchOnlyBalance() const
     return nTotal;
 }
 
-void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, AvailableCoinsType nCoinType, bool fUseInstantSend) const
+void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, 
+	AvailableCoinsType nCoinType, bool fUseInstantSend) const
 {
+	
+    //isminefilter filter = ISMINE_SPENDABLE;
+
     vCoins.clear();
 
     {
@@ -2369,13 +2377,22 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
             const CWalletTx* pcoin = &(*it).second;
 
             if (!CheckFinalTx(*pcoin))
+			{
+				printf(" not a final tx ");
                 continue;
+			}
 
             if (fOnlyConfirmed && !pcoin->IsTrusted())
+			{
+				//printf(" not trusted ");
                 continue;
+			}
 
             if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity() > 0)
+			{
+				//printf(" not past BTM %f ",(double)pcoin->GetBlocksToMaturity());
                 continue;
+			}
 
             int nDepth = pcoin->GetDepthInMainChain(false);
             // do not use IX for inputs that have less then INSTANTSEND_CONFIRMATIONS_REQUIRED blockchain confirmations
@@ -2385,36 +2402,62 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
             // We should not consider coins which aren't at least in our mempool
             // It's possible for these to be conflicted via ancestors which we may never be able to detect
             if (nDepth == 0 && !pcoin->InMempool())
+			{
+				printf(" NOT IN MEMPOOL ");
                 continue;
+			}
 
-            for (unsigned int i = 0; i < pcoin->vout.size(); i++) {
+            for (unsigned int i = 0; i < pcoin->vout.size(); i++) 
+			{
                 bool found = false;
-                if(nCoinType == ONLY_DENOMINATED) {
+                if(nCoinType == ONLY_DENOMINATED) 
+				{
                     found = IsDenominatedAmount(pcoin->vout[i].nValue);
-                } else if(nCoinType == ONLY_NOT1000IFMN) {
+                }
+				else if(nCoinType == ONLY_NOT1000IFMN) 
+				{
                     found = !(fMasterNode && pcoin->vout[i].nValue == 1000*COIN);
-                } else if(nCoinType == ONLY_NONDENOMINATED_NOT1000IFMN) {
+                }
+				else if(nCoinType == ONLY_NONDENOMINATED_NOT1000IFMN) 
+				{
                     if (IsCollateralAmount(pcoin->vout[i].nValue)) continue; // do not use collateral amounts
                     found = !IsDenominatedAmount(pcoin->vout[i].nValue);
                     if(found && fMasterNode) found = pcoin->vout[i].nValue != 1000*COIN; // do not use Hot MN funds
-                } else if(nCoinType == ONLY_1000) {
+                }
+				else if(nCoinType == ONLY_1000) 
+				{
                     found = pcoin->vout[i].nValue == 1000*COIN;
-                } else if(nCoinType == ONLY_PRIVATESEND_COLLATERAL) {
+                }
+				else if(nCoinType == ONLY_PRIVATESEND_COLLATERAL) 
+				{
                     found = IsCollateralAmount(pcoin->vout[i].nValue);
-                } else {
-                    found = true;
+                }
+				else 
+				{
+		            found = true;
                 }
                 if(!found) continue;
 
-                isminetype mine = IsMine(pcoin->vout[i]);
-                if (!(IsSpent(wtxid, i)) && mine != ISMINE_NO &&
-                    (!IsLockedCoin((*it).first, i) || nCoinType == ONLY_1000) &&
-                    (pcoin->vout[i].nValue > 0 || fIncludeZeroValue) &&
-                    (!coinControl || !coinControl->HasSelected() || coinControl->fAllowOtherInputs || coinControl->IsSelected(COutPoint((*it).first, i))))
+
+				CTxDestination txdest;
+                if (!ExtractDestination(pcoin->vout[i].scriptPubKey, txdest)) continue;
+                isminefilter mine = ::IsMine(*this, txdest);
+
+	            if (!(IsSpent(wtxid, i)) && mine != ISMINE_NO && (!IsLockedCoin((*it).first, i) || nCoinType == ONLY_1000) )
+				{
+					// if (pcoin->vout[i].nValue/COIN > 1000) printf(" deciding %f ",(double)pcoin->vout[i].nValue/COIN);
+					
+					if ((pcoin->vout[i].nValue > 0 || fIncludeZeroValue) &&
+                       (!coinControl || !coinControl->HasSelected() || coinControl->fAllowOtherInputs || coinControl->IsSelected(COutPoint((*it).first, i))))
+					{
+
                         vCoins.push_back(COutput(pcoin, i, nDepth,
                                                  ((mine & ISMINE_SPENDABLE) != ISMINE_NO) ||
                                                   (coinControl && coinControl->fAllowWatchOnly && (mine & ISMINE_WATCH_SOLVABLE) != ISMINE_NO),
                                                  (mine & (ISMINE_SPENDABLE | ISMINE_WATCH_SOLVABLE)) != ISMINE_NO));
+						// printf(" AddingCoin %f size %f ",(double)pcoin->vout[i].nValue/COIN,(double)vCoins.size());
+					}
+				}
             }
         }
     }
@@ -2494,6 +2537,32 @@ bool less_then_denom (const COutput& out1, const COutput& out2)
     }
     return (!found1 && found2);
 }
+
+
+bool CWallet::MintableCoins()
+{
+    CAmount nBalance = GetBalance();
+    if (mapArgs.count("-reservebalance") && !ParseMoney(mapArgs["-reservebalance"], nReserveBalance))
+        return error("MintableCoins() : invalid reserve balance amount");
+    if (nBalance <= nReserveBalance)
+        return false;
+
+    vector<COutput> vCoins;
+    AvailableCoins(vCoins, true);
+
+    for (const COutput& out : vCoins) 
+	{
+        int64_t nTxTime = out.tx->GetTxTime();
+        if (GetAdjustedTime() - nTxTime > nStakeMinAge)
+		{
+            return true;
+		}
+    }
+
+    return false;
+}
+
+
 
 bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int nConfTheirs, vector<COutput> vCoins,
                                  set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet, bool fUseInstantSend) const
@@ -2620,7 +2689,8 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int
     return true;
 }
 
-bool CWallet::SelectCoins(const CAmount& nTargetValue, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet, const CCoinControl* coinControl, AvailableCoinsType nCoinType, bool fUseInstantSend) const
+bool CWallet::SelectCoins(const CAmount& nTargetValue, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet, const CCoinControl* coinControl, 
+	AvailableCoinsType nCoinType, bool fUseInstantSend) const
 {
     // Note: this function should never be used for "always free" tx types like dstx
 
@@ -3521,6 +3591,269 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
     return true;
 }
 
+
+
+bool CWallet::SelectStakeCoins(std::set<std::pair<const CWalletTx*, unsigned int> >& setCoins, CAmount nTargetAmount) const
+{
+    vector<COutput> vCoins;
+	AvailableCoins(vCoins,true,NULL,false,ONLY_NOT1000IFMN);
+    CAmount nAmountSelected = 0;
+	
+    for (const COutput& out : vCoins) 
+	{
+	    //make sure not to outrun target amount
+        if (nAmountSelected + out.tx->vout[out.i].nValue > nTargetAmount)
+		{
+			printf(" outrun ");
+            continue;
+		}
+
+        //if zerocoinspend, then use the block time
+        int64_t nTxTime = out.tx->GetTxTime();
+       
+        //check for min age
+        if (GetAdjustedTime() - nTxTime < nStakeMinAge)
+		{
+			printf(" < nStakeMinAge %f ",(double)nStakeMinAge);
+            continue;
+		}
+
+        //check that it is matured
+        if (out.nDepth < (out.tx->IsCoinStake() ? COINBASE_MATURITY : 10))
+		{
+			printf(" immature ");
+            continue;
+		}
+
+        //add to our stake set
+        setCoins.insert(make_pair(out.tx, out.i));
+        nAmountSelected += out.tx->vout[out.i].nValue;
+    }
+	return true;
+}
+
+
+// ppcoin: create coin stake transaction
+bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, CMutableTransaction& txNew, unsigned int& nTxNewTime, CBlock *blk)
+{
+    // The following split & combine thresholds are important to security
+    // Should not be adjusted if you don't understand the consequences
+    //int64_t nCombineThreshold = 0;
+
+    txNew.vin.clear();
+    txNew.vout.clear();
+
+    // Mark coin stake transaction
+    CScript scriptEmpty;
+    scriptEmpty.clear();
+    txNew.vout.push_back(CTxOut(0, scriptEmpty));
+
+    // Choose coins to use
+    CAmount nBalance = GetBalance();
+    if (mapArgs.count("-reservebalance") && !ParseMoney(mapArgs["-reservebalance"], nReserveBalance))
+	{
+		printf(" invalid reserve balance amount ");
+        return error("CreateCoinStake : invalid reserve balance amount");
+	}
+
+    if (nBalance <= nReserveBalance)
+	{
+		printf(" balance < reserve ");
+        return false;
+	}
+
+    // presstab HyperStake - Initialize as static and don't update the set on every run of CreateCoinStake() in order to lighten resource use
+    static std::set<pair<const CWalletTx*, unsigned int> > setStakeCoins;
+    static int nLastStakeSetUpdate = 0;
+
+    if (true || GetTime() - nLastStakeSetUpdate > nStakeSetUpdateTime) 
+	{
+        setStakeCoins.clear();
+        if (!SelectStakeCoins(setStakeCoins, nBalance - nReserveBalance))
+		{
+			printf(" Cant select stake coins %f ", double(nBalance-nReserveBalance));
+            return false;
+		}
+
+        nLastStakeSetUpdate = GetTime();
+    }
+
+    if (setStakeCoins.empty())
+	{
+		// This is what usually happens
+		 printf(" setStakeCoins empty %f , %f ", (double)nBalance/COIN, (double)nReserveBalance/COIN);
+        return false;
+	}
+
+    vector<const CWalletTx*> vwtxPrev;
+
+    CAmount nCredit = 0;
+    CScript scriptPubKeyKernel;
+
+    //prevent staking a time that won't be accepted
+    if (GetAdjustedTime() <= chainActive.Tip()->nTime)
+        MilliSleep(10000);
+
+    BOOST_FOREACH (PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setStakeCoins) {
+        //make sure that enough time has elapsed between
+        CBlockIndex* pindex = NULL;
+        BlockMap::iterator it = mapBlockIndex.find(pcoin.first->hashBlock);
+        if (it != mapBlockIndex.end())
+            pindex = it->second;
+        else {
+            if (fDebug)
+                LogPrintf("CreateCoinStake() failed to find block index \n");
+            continue;
+        }
+
+        // Read block header
+        CBlockHeader block = pindex->GetBlockHeader();
+
+        bool fKernelFound = false;
+        uint256 hashProofOfStake = uint256S("0x0");
+        COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
+        nTxNewTime = GetAdjustedTime();
+
+        //iterates each utxo inside of CheckStakeKernelHash()
+        if (CheckStakeKernelHash(nBits, block, *pcoin.first, prevoutStake, nTxNewTime, nStakeHashDrift, false, hashProofOfStake, true)) {
+            //Double check that this will pass time requirements
+            if (nTxNewTime <= chainActive.Tip()->GetMedianTimePast()) {
+                LogPrintf("CreateCoinStake() : kernel found, but it is too far in the past \n");
+                continue;
+            }
+
+            // Found a kernel
+            if (fDebug && GetBoolArg("-printcoinstake", false))
+                LogPrintf("CreateCoinStake : kernel found\n");
+
+            vector<valtype> vSolutions;
+            txnouttype whichType;
+            CScript scriptPubKeyOut;
+            scriptPubKeyKernel = pcoin.first->vout[pcoin.second].scriptPubKey;
+            if (!Solver(scriptPubKeyKernel, whichType, vSolutions)) {
+                LogPrintf("CreateCoinStake : failed to parse kernel\n");
+                break;
+            }
+            if (fDebug && GetBoolArg("-printcoinstake", false))
+                LogPrintf("CreateCoinStake : parsed kernel type=%d\n", whichType);
+            if (whichType != TX_PUBKEY && whichType != TX_PUBKEYHASH) {
+                if (fDebug && GetBoolArg("-printcoinstake", false))
+                    LogPrintf("CreateCoinStake : no support for kernel type=%d\n", whichType);
+                break; // only support pay to public key and pay to address
+            }
+            if (whichType == TX_PUBKEYHASH) // pay to address type
+            {
+                //convert to pay to public key type
+                CKey key;
+                if (!keystore.GetKey(uint160(vSolutions[0]), key)) {
+                    if (fDebug && GetBoolArg("-printcoinstake", false))
+                        LogPrintf("CreateCoinStake : failed to get key for kernel type=%d\n", whichType);
+                    break; // unable to find corresponding public key
+                }
+
+                //scriptPubKeyOut << key.GetPubKey() << OP_CHECKSIG;
+				//   pubkey = secret.GetPubKey();
+     
+				scriptPubKeyOut = GetScriptForDestination(key.GetPubKey().GetID());
+ 
+
+            } else
+                scriptPubKeyOut = scriptPubKeyKernel;
+
+            txNew.vin.push_back(CTxIn(pcoin.first->GetHash(), pcoin.second));
+            nCredit += pcoin.first->vout[pcoin.second].nValue;
+            vwtxPrev.push_back(pcoin.first);
+            txNew.vout.push_back(CTxOut(0, scriptPubKeyOut));
+
+            //presstab HyperStake - calculate the total size of our new output including the stake reward so that we can use it to decide whether to split the stake outputs
+            const CBlockIndex* pIndex0 = chainActive.Tip();
+			const CChainParams& chainParams = Params();
+
+            uint64_t nTotalSize = pcoin.first->vout[pcoin.second].nValue + GetBlockSubsidy(pIndex0->nBits, pIndex0->nHeight, chainParams.GetConsensus(), false);
+		
+            //presstab HyperStake - if MultiSend is set to send in coinstake we will add our outputs here (values asigned further down)
+            if (nTotalSize / 2 > nStakeSplitThreshold * COIN)
+                txNew.vout.push_back(CTxOut(0, scriptPubKeyOut)); //split stake
+
+            if (fDebug && GetBoolArg("-printcoinstake", false))
+                LogPrintf("CreateCoinStake : added kernel type=%d\n", whichType);
+            fKernelFound = true;
+            break;
+        }
+        if (fKernelFound)
+            break; // if kernel is found stop searching
+    }
+    if (nCredit == 0 || nCredit > nBalance - nReserveBalance)
+        return false;
+
+    // Calculate reward
+    CAmount nReward;
+    const CBlockIndex* pIndex0 = chainActive.Tip();
+    // nReward = GetBlockValue(pIndex0->nHeight);
+	//12-1-2017 nBits
+	const CChainParams& chainParams = Params();
+
+	nReward = GetBlockSubsidy(pIndex0->nBits, pIndex0->nHeight, chainParams.GetConsensus(), false);
+
+    nCredit += nReward;
+
+    CAmount nMinFee = 0;
+    while (true) {
+        // Set output amount
+        if (txNew.vout.size() == 3) {
+            txNew.vout[1].nValue = ((nCredit - nMinFee) / 2 / CENT) * CENT;
+            txNew.vout[2].nValue = nCredit - nMinFee - txNew.vout[1].nValue;
+        } else
+            txNew.vout[1].nValue = nCredit - nMinFee;
+
+        // Limit size
+        unsigned int nBytes = ::GetSerializeSize(txNew, SER_NETWORK, PROTOCOL_VERSION);
+        if (nBytes >= DEFAULT_BLOCK_MAX_SIZE / 5)
+            return error("CreateCoinStake : exceeded coinstake size limit");
+
+        CAmount nFeeNeeded = GetMinimumFee(nBytes, nTxConfirmTarget, mempool);
+
+        // Check enough fee is paid
+        if (nMinFee < nFeeNeeded) {
+            nMinFee = nFeeNeeded;
+            continue; // try signing again
+        } else {
+            if (fDebug)
+                LogPrintf("CreateCoinStake : fee for coinstake %s\n", FormatMoney(nMinFee).c_str());
+            break;
+        }
+    }
+
+    //Masternode payment
+    //FillBlockPayee (txNew, nMinFee, true);  
+	//Emergency test: Check to see if superblock pays if we sign First then append the recipients to coinstake
+
+	const int nHeight = pIndex0->nHeight + 1;
+    FillBlockPayments(txNew, nHeight, nReward, blk->txoutMasternode, blk->voutSuperblock);
+      
+    // Sign
+    int nIn = 0;
+    BOOST_FOREACH (const CWalletTx* pcoin, vwtxPrev) {
+        if (!SignSignature(*this, *pcoin, txNew, nIn++))
+            return error("CreateCoinStake : failed to sign coinstake");
+    }
+
+    // Successfully generated coinstake
+    nLastStakeSetUpdate = 0; //this will trigger stake set to repopulate next round
+    return true;
+}
+
+
+
+
+
+
+
+
+
+
+
+
 /**
  * Call after CreateTransaction unless you want to abort
  */
@@ -3635,8 +3968,9 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
 
     {
         LOCK2(cs_main, cs_wallet);
-        for (auto& pair : mapWallet) {
-            for(int i = 0; i < pair.second.vout.size(); ++i) {
+        for (auto& pair : mapWallet) 
+		{
+            for(int i = 0; i < (int)pair.second.vout.size(); ++i) {
                 if (IsMine(pair.second.vout[i]) && !IsSpent(pair.first, i)) {
                     setWalletUTXO.insert(COutPoint(pair.first, i));
                 }

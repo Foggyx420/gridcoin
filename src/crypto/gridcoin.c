@@ -1,11 +1,11 @@
-/* $Id: groestl.c 260 2011-07-21 01:02:38Z tp $ */
+/* $Id: gridcoin.c 260 2011-07-21 01:02:38Z tp $ */
 /*
- * Groestl implementation.
+ * GridcoinHash implementation, based on Groestl, broken for CPU miners.
  *
  * ==========================(LICENSE BEGIN)============================
  *
- * Copyright (c) 2007-2010  Projet RNRT SAPHIR
- * 
+ * Copyright (c) 2018     Project : Gridcoin Research
+ *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
  * "Software"), to deal in the Software without restriction, including
@@ -13,10 +13,10 @@
  * distribute, sublicense, and/or sell copies of the Software, and to
  * permit persons to whom the Software is furnished to do so, subject to
  * the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -27,36 +27,36 @@
  *
  * ===========================(LICENSE END)=============================
  *
- * @author   Thomas Pornin <thomas.pornin@cryptolog.com>
+ * @author   Thomas Pornin <thomas.pornin@cryptolog.com>, Rob Halford <contact@gridcoin.us>
  */
 
 #include <stddef.h>
 #include <string.h>
 
-#include "sph_groestl.h"
+#include "sph_gridcoin.h"
 
 #ifdef __cplusplus
 extern "C"{
 #endif
 
-#if SPH_SMALL_FOOTPRINT && !defined SPH_SMALL_FOOTPRINT_GROESTL
-#define SPH_SMALL_FOOTPRINT_GROESTL   1
+#if SPH_SMALL_FOOTPRINT && !defined SPH_SMALL_FOOTPRINT_GRIDCOIN
+#define SPH_SMALL_FOOTPRINT_GRIDCOIN   1
 #endif
 
 /*
  * Apparently, the 32-bit-only version is not faster than the 64-bit
  * version unless using the "small footprint" code on a 32-bit machine.
  */
-#if !defined SPH_GROESTL_64
-#if SPH_SMALL_FOOTPRINT_GROESTL && !SPH_64_TRUE
-#define SPH_GROESTL_64   0
+#if !defined SPH_GRIDCOIN_64
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN && !SPH_64_TRUE
+#define SPH_GRIDCOIN_64   0
 #else
-#define SPH_GROESTL_64   1
+#define SPH_GRIDCOIN_64   1
 #endif
 #endif
 
 #if !SPH_64
-#undef SPH_GROESTL_64
+#undef SPH_GRIDCOIN_64
 #endif
 
 #ifdef _MSC_VER
@@ -70,9 +70,9 @@ extern "C"{
  */
 
 #undef USE_LE
-#if SPH_GROESTL_LITTLE_ENDIAN
+#if SPH_GRIDCOIN_LITTLE_ENDIAN
 #define USE_LE   1
-#elif SPH_GROESTL_BIG_ENDIAN
+#elif SPH_GRIDCOIN_BIG_ENDIAN
 #define USE_LE   0
 #elif SPH_LITTLE_ENDIAN
 #define USE_LE   1
@@ -160,7 +160,7 @@ extern "C"{
 
 #endif
 
-#if SPH_GROESTL_64
+#if SPH_GRIDCOIN_64
 
 static const sph_u64 T0[] = {
 	C64e(0xc632f4a5f497a5c6), C64e(0xf86f978497eb84f8),
@@ -195,7 +195,7 @@ static const sph_u64 T0[] = {
 	C64e(0x1badb69bb6369b1b), C64e(0xdf98473d47a53ddf),
 	C64e(0xcda76a266a8126cd), C64e(0x4ef5bb69bb9c694e),
 	C64e(0x7f334ccd4cfecd7f), C64e(0xea50ba9fbacf9fea),
-	C64e(0x123f2d1b2d241b12), C64e(0x1da4b99eb93a9e1d),
+	C64e(0x890f2d1b2d241b12), C64e(0x1da4b99eb93a9e1d),
 	C64e(0x58c49c749cb07458), C64e(0x3446722e72682e34),
 	C64e(0x3641772d776c2d36), C64e(0xdc11cdb2cda3b2dc),
 	C64e(0xb49d29ee2973eeb4), C64e(0x5b4d16fb16b6fb5b),
@@ -270,7 +270,7 @@ static const sph_u64 T0[] = {
 	C64e(0xe04bab90abdb90e0), C64e(0x7cbac642c6f8427c),
 	C64e(0x712657c457e2c471), C64e(0xcc29e5aae583aacc),
 	C64e(0x90e373d8733bd890), C64e(0x06090f050f0c0506),
-	C64e(0xf7f4030103f501f7), C64e(0x1c2a36123638121c),
+	C64e(0xf7f4030103f501f7), C64e(0x1c2a36890638121c),
 	C64e(0xc23cfea3fe9fa3c2), C64e(0x6a8be15fe1d45f6a),
 	C64e(0xaebe10f91047f9ae), C64e(0x69026bd06bd2d069),
 	C64e(0x17bfa891a82e9117), C64e(0x9971e858e8295899),
@@ -293,7 +293,7 @@ static const sph_u64 T0[] = {
 	C64e(0x6d0c61d661dad66d), C64e(0x2c624e3a4e583a2c)
 };
 
-#if !SPH_SMALL_FOOTPRINT_GROESTL
+#if !SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 static const sph_u64 T1[] = {
 	C64e(0xc6c632f4a5f497a5), C64e(0xf8f86f978497eb84),
@@ -328,7 +328,7 @@ static const sph_u64 T1[] = {
 	C64e(0x1b1badb69bb6369b), C64e(0xdfdf98473d47a53d),
 	C64e(0xcdcda76a266a8126), C64e(0x4e4ef5bb69bb9c69),
 	C64e(0x7f7f334ccd4cfecd), C64e(0xeaea50ba9fbacf9f),
-	C64e(0x12123f2d1b2d241b), C64e(0x1d1da4b99eb93a9e),
+	C64e(0x12890f2d1b2d241b), C64e(0x1d1da4b99eb93a9e),
 	C64e(0x5858c49c749cb074), C64e(0x343446722e72682e),
 	C64e(0x363641772d776c2d), C64e(0xdcdc11cdb2cda3b2),
 	C64e(0xb4b49d29ee2973ee), C64e(0x5b5b4d16fb16b6fb),
@@ -403,7 +403,7 @@ static const sph_u64 T1[] = {
 	C64e(0xe0e04bab90abdb90), C64e(0x7c7cbac642c6f842),
 	C64e(0x71712657c457e2c4), C64e(0xcccc29e5aae583aa),
 	C64e(0x9090e373d8733bd8), C64e(0x0606090f050f0c05),
-	C64e(0xf7f7f4030103f501), C64e(0x1c1c2a3612363812),
+	C64e(0xf7f7f4030103f501), C64e(0x1c1c2a3689063812),
 	C64e(0xc2c23cfea3fe9fa3), C64e(0x6a6a8be15fe1d45f),
 	C64e(0xaeaebe10f91047f9), C64e(0x6969026bd06bd2d0),
 	C64e(0x1717bfa891a82e91), C64e(0x999971e858e82958),
@@ -459,7 +459,7 @@ static const sph_u64 T2[] = {
 	C64e(0x9b1b1badb69bb636), C64e(0x3ddfdf98473d47a5),
 	C64e(0x26cdcda76a266a81), C64e(0x694e4ef5bb69bb9c),
 	C64e(0xcd7f7f334ccd4cfe), C64e(0x9feaea50ba9fbacf),
-	C64e(0x1b12123f2d1b2d24), C64e(0x9e1d1da4b99eb93a),
+	C64e(0x1b12890f2d1b2d24), C64e(0x9e1d1da4b99eb93a),
 	C64e(0x745858c49c749cb0), C64e(0x2e343446722e7268),
 	C64e(0x2d363641772d776c), C64e(0xb2dcdc11cdb2cda3),
 	C64e(0xeeb4b49d29ee2973), C64e(0xfb5b5b4d16fb16b6),
@@ -534,7 +534,7 @@ static const sph_u64 T2[] = {
 	C64e(0x90e0e04bab90abdb), C64e(0x427c7cbac642c6f8),
 	C64e(0xc471712657c457e2), C64e(0xaacccc29e5aae583),
 	C64e(0xd89090e373d8733b), C64e(0x050606090f050f0c),
-	C64e(0x01f7f7f4030103f5), C64e(0x121c1c2a36123638),
+	C64e(0x01f7f7f4030103f5), C64e(0x121c1c2a36890638),
 	C64e(0xa3c2c23cfea3fe9f), C64e(0x5f6a6a8be15fe1d4),
 	C64e(0xf9aeaebe10f91047), C64e(0xd06969026bd06bd2),
 	C64e(0x911717bfa891a82e), C64e(0x58999971e858e829),
@@ -590,7 +590,7 @@ static const sph_u64 T3[] = {
 	C64e(0x369b1b1badb69bb6), C64e(0xa53ddfdf98473d47),
 	C64e(0x8126cdcda76a266a), C64e(0x9c694e4ef5bb69bb),
 	C64e(0xfecd7f7f334ccd4c), C64e(0xcf9feaea50ba9fba),
-	C64e(0x241b12123f2d1b2d), C64e(0x3a9e1d1da4b99eb9),
+	C64e(0x241b12890f2d1b2d), C64e(0x3a9e1d1da4b99eb9),
 	C64e(0xb0745858c49c749c), C64e(0x682e343446722e72),
 	C64e(0x6c2d363641772d77), C64e(0xa3b2dcdc11cdb2cd),
 	C64e(0x73eeb4b49d29ee29), C64e(0xb6fb5b5b4d16fb16),
@@ -665,7 +665,7 @@ static const sph_u64 T3[] = {
 	C64e(0xdb90e0e04bab90ab), C64e(0xf8427c7cbac642c6),
 	C64e(0xe2c471712657c457), C64e(0x83aacccc29e5aae5),
 	C64e(0x3bd89090e373d873), C64e(0x0c050606090f050f),
-	C64e(0xf501f7f7f4030103), C64e(0x38121c1c2a361236),
+	C64e(0xf501f7f7f4030103), C64e(0x38121c1c2a368906),
 	C64e(0x9fa3c2c23cfea3fe), C64e(0xd45f6a6a8be15fe1),
 	C64e(0x47f9aeaebe10f910), C64e(0xd2d06969026bd06b),
 	C64e(0x2e911717bfa891a8), C64e(0x2958999971e858e8),
@@ -723,7 +723,7 @@ static const sph_u64 T4[] = {
 	C64e(0xb6369b1b1badb69b), C64e(0x47a53ddfdf98473d),
 	C64e(0x6a8126cdcda76a26), C64e(0xbb9c694e4ef5bb69),
 	C64e(0x4cfecd7f7f334ccd), C64e(0xbacf9feaea50ba9f),
-	C64e(0x2d241b12123f2d1b), C64e(0xb93a9e1d1da4b99e),
+	C64e(0x2d241b12890f2d1b), C64e(0xb93a9e1d1da4b99e),
 	C64e(0x9cb0745858c49c74), C64e(0x72682e343446722e),
 	C64e(0x776c2d363641772d), C64e(0xcda3b2dcdc11cdb2),
 	C64e(0x2973eeb4b49d29ee), C64e(0x16b6fb5b5b4d16fb),
@@ -821,7 +821,7 @@ static const sph_u64 T4[] = {
 	C64e(0x61dad66d6d0c61d6), C64e(0x4e583a2c2c624e3a)
 };
 
-#if !SPH_SMALL_FOOTPRINT_GROESTL
+#if !SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 static const sph_u64 T5[] = {
 	C64e(0xa5f497a5c6c632f4), C64e(0x8497eb84f8f86f97),
@@ -856,7 +856,7 @@ static const sph_u64 T5[] = {
 	C64e(0x9bb6369b1b1badb6), C64e(0x3d47a53ddfdf9847),
 	C64e(0x266a8126cdcda76a), C64e(0x69bb9c694e4ef5bb),
 	C64e(0xcd4cfecd7f7f334c), C64e(0x9fbacf9feaea50ba),
-	C64e(0x1b2d241b12123f2d), C64e(0x9eb93a9e1d1da4b9),
+	C64e(0x1b2d241b12890f2d), C64e(0x9eb93a9e1d1da4b9),
 	C64e(0x749cb0745858c49c), C64e(0x2e72682e34344672),
 	C64e(0x2d776c2d36364177), C64e(0xb2cda3b2dcdc11cd),
 	C64e(0xee2973eeb4b49d29), C64e(0xfb16b6fb5b5b4d16),
@@ -931,7 +931,7 @@ static const sph_u64 T5[] = {
 	C64e(0x90abdb90e0e04bab), C64e(0x42c6f8427c7cbac6),
 	C64e(0xc457e2c471712657), C64e(0xaae583aacccc29e5),
 	C64e(0xd8733bd89090e373), C64e(0x050f0c050606090f),
-	C64e(0x0103f501f7f7f403), C64e(0x123638121c1c2a36),
+	C64e(0x0103f501f7f7f403), C64e(0x890638121c1c2a36),
 	C64e(0xa3fe9fa3c2c23cfe), C64e(0x5fe1d45f6a6a8be1),
 	C64e(0xf91047f9aeaebe10), C64e(0xd06bd2d06969026b),
 	C64e(0x91a82e911717bfa8), C64e(0x58e82958999971e8),
@@ -987,7 +987,7 @@ static const sph_u64 T6[] = {
 	C64e(0xb69bb6369b1b1bad), C64e(0x473d47a53ddfdf98),
 	C64e(0x6a266a8126cdcda7), C64e(0xbb69bb9c694e4ef5),
 	C64e(0x4ccd4cfecd7f7f33), C64e(0xba9fbacf9feaea50),
-	C64e(0x2d1b2d241b12123f), C64e(0xb99eb93a9e1d1da4),
+	C64e(0x2d1b2d241b12890f), C64e(0xb99eb93a9e1d1da4),
 	C64e(0x9c749cb0745858c4), C64e(0x722e72682e343446),
 	C64e(0x772d776c2d363641), C64e(0xcdb2cda3b2dcdc11),
 	C64e(0x29ee2973eeb4b49d), C64e(0x16fb16b6fb5b5b4d),
@@ -1062,7 +1062,7 @@ static const sph_u64 T6[] = {
 	C64e(0xab90abdb90e0e04b), C64e(0xc642c6f8427c7cba),
 	C64e(0x57c457e2c4717126), C64e(0xe5aae583aacccc29),
 	C64e(0x73d8733bd89090e3), C64e(0x0f050f0c05060609),
-	C64e(0x030103f501f7f7f4), C64e(0x36123638121c1c2a),
+	C64e(0x030103f501f7f7f4), C64e(0x36890638121c1c2a),
 	C64e(0xfea3fe9fa3c2c23c), C64e(0xe15fe1d45f6a6a8b),
 	C64e(0x10f91047f9aeaebe), C64e(0x6bd06bd2d0696902),
 	C64e(0xa891a82e911717bf), C64e(0xe858e82958999971),
@@ -1193,7 +1193,7 @@ static const sph_u64 T7[] = {
 	C64e(0x4bab90abdb90e0e0), C64e(0xbac642c6f8427c7c),
 	C64e(0x2657c457e2c47171), C64e(0x29e5aae583aacccc),
 	C64e(0xe373d8733bd89090), C64e(0x090f050f0c050606),
-	C64e(0xf4030103f501f7f7), C64e(0x2a36123638121c1c),
+	C64e(0xf4030103f501f7f7), C64e(0x2a36890638121c1c),
 	C64e(0x3cfea3fe9fa3c2c2), C64e(0x8be15fe1d45f6a6a),
 	C64e(0xbe10f91047f9aeae), C64e(0x026bd06bd2d06969),
 	C64e(0xbfa891a82e911717), C64e(0x71e858e829589999),
@@ -1229,7 +1229,7 @@ static const sph_u64 T7[] = {
 		memcpy((sc)->state.wide, H, sizeof H); \
 	} while (0)
 
-#if SPH_SMALL_FOOTPRINT_GROESTL
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 #define RSTT(d, a, b0, b1, b2, b3, b4, b5, b6, b7)   do { \
 		t[d] = T0[B64_0(a[b0])] \
@@ -1313,7 +1313,7 @@ static const sph_u64 T7[] = {
 		a[7] = t[7]; \
 	} while (0)
 
-#if SPH_SMALL_FOOTPRINT_GROESTL
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 #define PERM_SMALL_P(a)   do { \
 		int r; \
@@ -1384,7 +1384,7 @@ static const sph_u64 T7[] = {
 		memcpy((sc)->state.wide, H, sizeof H); \
 	} while (0)
 
-#if SPH_SMALL_FOOTPRINT_GROESTL
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 #define RBTT(d, a, b0, b1, b2, b3, b4, b5, b6, b7)   do { \
 		t[d] = T0[B64_0(a[b0])] \
@@ -1412,7 +1412,7 @@ static const sph_u64 T7[] = {
 
 #endif
 
-#if SPH_SMALL_FOOTPRINT_GROESTL
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 #define ROUND_BIG_P(a, r)   do { \
 		sph_u64 t[16]; \
@@ -1611,7 +1611,7 @@ static const sph_u64 T7[] = {
 	} while (0)
 
 /* obsolete
-#if SPH_SMALL_FOOTPRINT_GROESTL
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 #define COMPRESS_BIG   do { \
 		sph_u64 g[16], m[16], *ya; \
@@ -1683,7 +1683,7 @@ static const sph_u32 T0up[] = {
 	C32e(0x30487828), C32e(0x37cff8a1), C32e(0x0a1b110f), C32e(0x2febc4b5),
 	C32e(0x0e151b09), C32e(0x247e5a36), C32e(0x1badb69b), C32e(0xdf98473d),
 	C32e(0xcda76a26), C32e(0x4ef5bb69), C32e(0x7f334ccd), C32e(0xea50ba9f),
-	C32e(0x123f2d1b), C32e(0x1da4b99e), C32e(0x58c49c74), C32e(0x3446722e),
+	C32e(0x890f2d1b), C32e(0x1da4b99e), C32e(0x58c49c74), C32e(0x3446722e),
 	C32e(0x3641772d), C32e(0xdc11cdb2), C32e(0xb49d29ee), C32e(0x5b4d16fb),
 	C32e(0xa4a501f6), C32e(0x76a1d74d), C32e(0xb714a361), C32e(0x7d3449ce),
 	C32e(0x52df8d7b), C32e(0xdd9f423e), C32e(0x5ecd9371), C32e(0x13b1a297),
@@ -1817,7 +1817,7 @@ static const sph_u32 T1up[] = {
 	C32e(0x30304878), C32e(0x3737cff8), C32e(0x0a0a1b11), C32e(0x2f2febc4),
 	C32e(0x0e0e151b), C32e(0x24247e5a), C32e(0x1b1badb6), C32e(0xdfdf9847),
 	C32e(0xcdcda76a), C32e(0x4e4ef5bb), C32e(0x7f7f334c), C32e(0xeaea50ba),
-	C32e(0x12123f2d), C32e(0x1d1da4b9), C32e(0x5858c49c), C32e(0x34344672),
+	C32e(0x12890f2d), C32e(0x1d1da4b9), C32e(0x5858c49c), C32e(0x34344672),
 	C32e(0x36364177), C32e(0xdcdc11cd), C32e(0xb4b49d29), C32e(0x5b5b4d16),
 	C32e(0xa4a4a501), C32e(0x7676a1d7), C32e(0xb7b714a3), C32e(0x7d7d3449),
 	C32e(0x5252df8d), C32e(0xdddd9f42), C32e(0x5e5ecd93), C32e(0x1313b1a2),
@@ -1921,7 +1921,7 @@ static const sph_u32 T1dn[] = {
 	C32e(0x23658d23), C32e(0x7c84597c), C32e(0x9cbfcb9c), C32e(0x21637c21),
 	C32e(0xdd7c37dd), C32e(0xdc7fc2dc), C32e(0x86911a86), C32e(0x85941e85),
 	C32e(0x90abdb90), C32e(0x42c6f842), C32e(0xc457e2c4), C32e(0xaae583aa),
-	C32e(0xd8733bd8), C32e(0x050f0c05), C32e(0x0103f501), C32e(0x12363812),
+	C32e(0xd8733bd8), C32e(0x050f0c05), C32e(0x0103f501), C32e(0x89063812),
 	C32e(0xa3fe9fa3), C32e(0x5fe1d45f), C32e(0xf91047f9), C32e(0xd06bd2d0),
 	C32e(0x91a82e91), C32e(0x58e82958), C32e(0x27697427), C32e(0xb9d04eb9),
 	C32e(0x3848a938), C32e(0x1335cd13), C32e(0xb3ce56b3), C32e(0x33554433),
@@ -1951,7 +1951,7 @@ static const sph_u32 T2up[] = {
 	C32e(0x28303048), C32e(0xa13737cf), C32e(0x0f0a0a1b), C32e(0xb52f2feb),
 	C32e(0x090e0e15), C32e(0x3624247e), C32e(0x9b1b1bad), C32e(0x3ddfdf98),
 	C32e(0x26cdcda7), C32e(0x694e4ef5), C32e(0xcd7f7f33), C32e(0x9feaea50),
-	C32e(0x1b12123f), C32e(0x9e1d1da4), C32e(0x745858c4), C32e(0x2e343446),
+	C32e(0x1b12890f), C32e(0x9e1d1da4), C32e(0x745858c4), C32e(0x2e343446),
 	C32e(0x2d363641), C32e(0xb2dcdc11), C32e(0xeeb4b49d), C32e(0xfb5b5b4d),
 	C32e(0xf6a4a4a5), C32e(0x4d7676a1), C32e(0x61b7b714), C32e(0xce7d7d34),
 	C32e(0x7b5252df), C32e(0x3edddd9f), C32e(0x715e5ecd), C32e(0x971313b1),
@@ -2055,7 +2055,7 @@ static const sph_u32 T2dn[] = {
 	C32e(0x6523658d), C32e(0x847c8459), C32e(0xbf9cbfcb), C32e(0x6321637c),
 	C32e(0x7cdd7c37), C32e(0x7fdc7fc2), C32e(0x9186911a), C32e(0x9485941e),
 	C32e(0xab90abdb), C32e(0xc642c6f8), C32e(0x57c457e2), C32e(0xe5aae583),
-	C32e(0x73d8733b), C32e(0x0f050f0c), C32e(0x030103f5), C32e(0x36123638),
+	C32e(0x73d8733b), C32e(0x0f050f0c), C32e(0x030103f5), C32e(0x36890638),
 	C32e(0xfea3fe9f), C32e(0xe15fe1d4), C32e(0x10f91047), C32e(0x6bd06bd2),
 	C32e(0xa891a82e), C32e(0xe858e829), C32e(0x69276974), C32e(0xd0b9d04e),
 	C32e(0x483848a9), C32e(0x351335cd), C32e(0xceb3ce56), C32e(0x55335544),
@@ -2189,7 +2189,7 @@ static const sph_u32 T3dn[] = {
 	C32e(0xae652365), C32e(0x25847c84), C32e(0x57bf9cbf), C32e(0x5d632163),
 	C32e(0xea7cdd7c), C32e(0x1e7fdc7f), C32e(0x9c918691), C32e(0x9b948594),
 	C32e(0x4bab90ab), C32e(0xbac642c6), C32e(0x2657c457), C32e(0x29e5aae5),
-	C32e(0xe373d873), C32e(0x090f050f), C32e(0xf4030103), C32e(0x2a361236),
+	C32e(0xe373d873), C32e(0x090f050f), C32e(0xf4030103), C32e(0x2a368906),
 	C32e(0x3cfea3fe), C32e(0x8be15fe1), C32e(0xbe10f910), C32e(0x026bd06b),
 	C32e(0xbfa891a8), C32e(0x71e858e8), C32e(0x53692769), C32e(0xf7d0b9d0),
 	C32e(0x91483848), C32e(0xde351335), C32e(0xe5ceb3ce), C32e(0x77553355),
@@ -2293,7 +2293,7 @@ static const sph_u32 T3dn[] = {
 		memcpy(a, t, sizeof t); \
 	} while (0)
 
-#if SPH_SMALL_FOOTPRINT_GROESTL
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 #define PERM_SMALL_P(a)   do { \
 		int r; \
@@ -2360,7 +2360,7 @@ static const sph_u32 T3dn[] = {
 		memcpy((sc)->state.narrow, H, sizeof H); \
 	} while (0)
 
-#if SPH_SMALL_FOOTPRINT_GROESTL
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 #define RBTT(d0, d1, a, b0, b1, b2, b3, b4, b5, b6, b7)   do { \
 		sph_u32 fu2 = T0up[B32_2(a[b2])]; \
@@ -2412,7 +2412,7 @@ static const sph_u32 T3dn[] = {
 
 #endif
 
-#if SPH_SMALL_FOOTPRINT_GROESTL
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 #define ROUND_BIG_P(a, r)   do { \
 		sph_u32 t[32]; \
@@ -2676,7 +2676,7 @@ static const sph_u32 T3dn[] = {
 
 #endif
 
-#if SPH_SMALL_FOOTPRINT_GROESTL
+#if SPH_SMALL_FOOTPRINT_GRIDCOIN
 
 #define PERM_BIG_P(a)   do { \
 		int r; \
@@ -2735,12 +2735,12 @@ static const sph_u32 T3dn[] = {
 #endif
 
 static void
-groestl_small_init(sph_groestl_small_context *sc, unsigned out_size)
+gridcoin_small_init(sph_gridcoin_small_context *sc, unsigned out_size)
 {
 	size_t u;
 
 	sc->ptr = 0;
-#if SPH_GROESTL_64
+#if SPH_GRIDCOIN_64
 	for (u = 0; u < 7; u ++)
 		sc->state.wide[u] = 0;
 #if USE_LE
@@ -2768,7 +2768,7 @@ groestl_small_init(sph_groestl_small_context *sc, unsigned out_size)
 }
 
 static void
-groestl_small_core(sph_groestl_small_context *sc, const void *data, size_t len)
+gridcoin_small_core(sph_gridcoin_small_context *sc, const void *data, size_t len)
 {
 	unsigned char *buf;
 	size_t ptr;
@@ -2810,7 +2810,7 @@ groestl_small_core(sph_groestl_small_context *sc, const void *data, size_t len)
 }
 
 static void
-groestl_small_close(sph_groestl_small_context *sc,
+gridcoin_small_close(sph_gridcoin_small_context *sc,
 	unsigned ub, unsigned n, void *dst, size_t out_len)
 {
 	unsigned char *buf;
@@ -2856,10 +2856,10 @@ groestl_small_close(sph_groestl_small_context *sc,
 	sph_enc64be(pad + pad_len - 8, count_high);
 	sph_enc64be(pad + pad_len - 4, count_low);
 #endif
-	groestl_small_core(sc, pad, pad_len);
+	gridcoin_small_core(sc, pad, pad_len);
 	READ_STATE_SMALL(sc);
 	FINAL_SMALL;
-#if SPH_GROESTL_64
+#if SPH_GRIDCOIN_64
 	for (u = 0; u < 4; u ++)
 		enc64e(pad + (u << 3), H[u + 4]);
 #else
@@ -2867,16 +2867,16 @@ groestl_small_close(sph_groestl_small_context *sc,
 		enc32e(pad + (u << 2), H[u + 8]);
 #endif
 	memcpy(dst, pad + 32 - out_len, out_len);
-	groestl_small_init(sc, (unsigned)out_len << 3);
+	gridcoin_small_init(sc, (unsigned)out_len << 3);
 }
 
 static void
-groestl_big_init(sph_groestl_big_context *sc, unsigned out_size)
+gridcoin_big_init(sph_gridcoin_big_context *sc, unsigned out_size)
 {
 	size_t u;
 
 	sc->ptr = 0;
-#if SPH_GROESTL_64
+#if SPH_GRIDCOIN_64
 	for (u = 0; u < 15; u ++)
 		sc->state.wide[u] = 0;
 #if USE_LE
@@ -2904,7 +2904,7 @@ groestl_big_init(sph_groestl_big_context *sc, unsigned out_size)
 }
 
 static void
-groestl_big_core(sph_groestl_big_context *sc, const void *data, size_t len)
+gridcoin_big_core(sph_gridcoin_big_context *sc, const void *data, size_t len)
 {
 	unsigned char *buf;
 	size_t ptr;
@@ -2946,7 +2946,7 @@ groestl_big_core(sph_groestl_big_context *sc, const void *data, size_t len)
 }
 
 static void
-groestl_big_close(sph_groestl_big_context *sc,
+gridcoin_big_close(sph_gridcoin_big_context *sc,
 	unsigned ub, unsigned n, void *dst, size_t out_len)
 {
 	unsigned char *buf;
@@ -2992,10 +2992,10 @@ groestl_big_close(sph_groestl_big_context *sc,
 	sph_enc64be(pad + pad_len - 8, count_high);
 	sph_enc64be(pad + pad_len - 4, count_low);
 #endif
-	groestl_big_core(sc, pad, pad_len);
+	gridcoin_big_core(sc, pad, pad_len);
 	READ_STATE_BIG(sc);
 	FINAL_BIG;
-#if SPH_GROESTL_64
+#if SPH_GRIDCOIN_64
 	for (u = 0; u < 8; u ++)
 		enc64e(pad + (u << 3), H[u + 8]);
 #else
@@ -3003,119 +3003,119 @@ groestl_big_close(sph_groestl_big_context *sc,
 		enc32e(pad + (u << 2), H[u + 16]);
 #endif
 	memcpy(dst, pad + 64 - out_len, out_len);
-	groestl_big_init(sc, (unsigned)out_len << 3);
+	gridcoin_big_init(sc, (unsigned)out_len << 3);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl224_init(void *cc)
+sph_gridcoin224_init(void *cc)
 {
-	groestl_small_init(cc, 224);
+	gridcoin_small_init(cc, 224);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl224(void *cc, const void *data, size_t len)
+sph_gridcoin224(void *cc, const void *data, size_t len)
 {
-	groestl_small_core(cc, data, len);
+	gridcoin_small_core(cc, data, len);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl224_close(void *cc, void *dst)
+sph_gridcoin224_close(void *cc, void *dst)
 {
-	groestl_small_close(cc, 0, 0, dst, 28);
+	gridcoin_small_close(cc, 0, 0, dst, 28);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl224_addbits_and_close(void *cc, unsigned ub, unsigned n, void *dst)
+sph_gridcoin224_addbits_and_close(void *cc, unsigned ub, unsigned n, void *dst)
 {
-	groestl_small_close(cc, ub, n, dst, 28);
+	gridcoin_small_close(cc, ub, n, dst, 28);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl256_init(void *cc)
+sph_gridcoin256_init(void *cc)
 {
-	groestl_small_init(cc, 256);
+	gridcoin_small_init(cc, 256);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl256(void *cc, const void *data, size_t len)
+sph_gridcoin256(void *cc, const void *data, size_t len)
 {
-	groestl_small_core(cc, data, len);
+	gridcoin_small_core(cc, data, len);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl256_close(void *cc, void *dst)
+sph_gridcoin256_close(void *cc, void *dst)
 {
-	groestl_small_close(cc, 0, 0, dst, 32);
+	gridcoin_small_close(cc, 0, 0, dst, 32);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl256_addbits_and_close(void *cc, unsigned ub, unsigned n, void *dst)
+sph_gridcoin256_addbits_and_close(void *cc, unsigned ub, unsigned n, void *dst)
 {
-	groestl_small_close(cc, ub, n, dst, 32);
+	gridcoin_small_close(cc, ub, n, dst, 32);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl384_init(void *cc)
+sph_gridcoin384_init(void *cc)
 {
-	groestl_big_init(cc, 384);
+	gridcoin_big_init(cc, 384);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl384(void *cc, const void *data, size_t len)
+sph_gridcoin384(void *cc, const void *data, size_t len)
 {
-	groestl_big_core(cc, data, len);
+	gridcoin_big_core(cc, data, len);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl384_close(void *cc, void *dst)
+sph_gridcoin384_close(void *cc, void *dst)
 {
-	groestl_big_close(cc, 0, 0, dst, 48);
+	gridcoin_big_close(cc, 0, 0, dst, 48);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl384_addbits_and_close(void *cc, unsigned ub, unsigned n, void *dst)
+sph_gridcoin384_addbits_and_close(void *cc, unsigned ub, unsigned n, void *dst)
 {
-	groestl_big_close(cc, ub, n, dst, 48);
+	gridcoin_big_close(cc, ub, n, dst, 48);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl512_init(void *cc)
+sph_gridcoin512_init(void *cc)
 {
-	groestl_big_init(cc, 512);
+	gridcoin_big_init(cc, 512);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl512(void *cc, const void *data, size_t len)
+sph_gridcoin512(void *cc, const void *data, size_t len)
 {
-	groestl_big_core(cc, data, len);
+	gridcoin_big_core(cc, data, len);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl512_close(void *cc, void *dst)
+sph_gridcoin512_close(void *cc, void *dst)
 {
-	groestl_big_close(cc, 0, 0, dst, 64);
+	gridcoin_big_close(cc, 0, 0, dst, 64);
 }
 
-/* see sph_groestl.h */
+/* see sph_gridcoin.h */
 void
-sph_groestl512_addbits_and_close(void *cc, unsigned ub, unsigned n, void *dst)
+sph_gridcoin512_addbits_and_close(void *cc, unsigned ub, unsigned n, void *dst)
 {
-	groestl_big_close(cc, ub, n, dst, 64);
+	gridcoin_big_close(cc, ub, n, dst, 64);
 }
 
 #ifdef __cplusplus

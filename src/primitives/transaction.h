@@ -136,6 +136,7 @@ public:
     CAmount nValue;
     CScript scriptPubKey;
     int nRounds;
+	std::string sTxOutMessage;
 
     CTxOut()
     {
@@ -150,6 +151,7 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
         READWRITE(nValue);
         READWRITE(*(CScriptBase*)(&scriptPubKey));
+		READWRITE(LIMITED_STRING(sTxOutMessage,1000));
     }
 
     void SetNull()
@@ -159,10 +161,22 @@ public:
         nRounds = -10; // an initial value, should be no way to get this by calculations
     }
 
-    bool IsNull() const
+	void SetEmpty()
+    {
+        nValue = 0;
+        scriptPubKey.clear();
+    }
+    
+	bool IsNull() const
     {
         return (nValue == -1);
     }
+
+	bool IsEmpty() const
+    {
+        return (nValue == 0 && scriptPubKey.empty());
+    }
+
 
     uint256 GetHash() const;
 
@@ -284,6 +298,12 @@ public:
     bool IsCoinBase() const
     {
         return (vin.size() == 1 && vin[0].prevout.IsNull());
+    }
+
+    bool IsCoinStake() const
+    {
+        // ppcoin: the coin stake transaction is marked with the first output empty
+        return (vin.size() > 0 && (!vin[0].prevout.IsNull()) && vout.size() >= 2 && vout[0].IsEmpty());
     }
 
     friend bool operator==(const CTransaction& a, const CTransaction& b)

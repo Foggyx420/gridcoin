@@ -56,7 +56,7 @@ public:
     const CMessageHeader::MessageStartChars& MessageStart() const { return pchMessageStart; }
     const std::vector<unsigned char>& AlertKey() const { return vAlertPubKey; }
     int GetDefaultPort() const { return nDefaultPort; }
-
+	int COINBASE_MATURITY() const { return nMaturity; }
     const CBlock& GenesisBlock() const { return genesis; }
     /** Make miner wait to have peers to avoid wasting work */
     bool MiningRequiresPeers() const { return fMiningRequiresPeers; }
@@ -64,6 +64,7 @@ public:
     bool DefaultConsistencyChecks() const { return fDefaultConsistencyChecks; }
     /** Policy: Filter transactions that do not match well-defined patterns */
     bool RequireStandard() const { return fRequireStandard; }
+	int LAST_POW_BLOCK() const { return nLastPOWBlock; }
     int64_t MaxTipAge() const { return nMaxTipAge; }
     int64_t DelayGetHeadersTime() const { return nDelayGetHeadersTime; }
     uint64_t PruneAfterHeight() const { return nPruneAfterHeight; }
@@ -90,6 +91,8 @@ protected:
     std::vector<unsigned char> vAlertPubKey;
     int nDefaultPort;
     long nMaxTipAge;
+	int nLastPOWBlock;
+	int nMaturity;
     int64_t nDelayGetHeadersTime;
     uint64_t nPruneAfterHeight;
     std::vector<CDNSSeedData> vSeeds;

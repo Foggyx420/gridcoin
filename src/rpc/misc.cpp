@@ -992,3 +992,48 @@ UniValue getspentinfo(const UniValue& params, bool fHelp)
 
     return obj;
 }
+
+
+
+#ifdef ENABLE_WALLET
+UniValue getstakingstatus(const UniValue& params, bool fHelp)
+{
+    if (fHelp)
+        throw runtime_error(
+            "getstakingstatus\n"
+            "Returns an object containing various staking information.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"validtime\": true|false,          (boolean) if the chain tip is within staking phases\n"
+            "  \"haveconnections\": true|false,    (boolean) if network connections are present\n"
+            "  \"walletunlocked\": true|false,     (boolean) if the wallet is unlocked\n"
+            "  \"mintablecoins\": true|false,      (boolean) if the wallet has mintable coins\n"
+            "  \"enoughcoins\": true|false,        (boolean) if available coins are greater than reserve balance\n"
+            "  \"mnsync\": true|false,             (boolean) if masternode data is synced\n"
+            "  \"staking status\": true|false,     (boolean) if the wallet is staking or not\n"
+            "}\n"
+            "\nExamples:\n" +
+            HelpExampleCli("getstakingstatus", "") + HelpExampleRpc("getstakingstatus", ""));
+
+    UniValue obj(UniValue::VOBJ);
+    obj.push_back(Pair("validtime", chainActive.Tip()->nTime > 1471482000));
+   // obj.push_back(Pair("haveconnections", !vNodes.empty()));
+    if (pwalletMain) 
+	{
+        obj.push_back(Pair("walletunlocked", !pwalletMain->IsLocked()));
+        obj.push_back(Pair("mintablecoins", pwalletMain->MintableCoins()));
+        obj.push_back(Pair("enoughcoins", nReserveBalance <= pwalletMain->GetBalance()));
+    }
+    obj.push_back(Pair("mnsync", masternodeSync.IsSynced()));
+
+    bool nStaking = false;
+    if (mapHashedBlocks.count(chainActive.Tip()->nHeight))
+        nStaking = true;
+    else if (mapHashedBlocks.count(chainActive.Tip()->nHeight - 1) && nLastCoinStakeSearchInterval)
+        nStaking = true;
+    obj.push_back(Pair("staking status", nStaking));
+
+    return obj;
+}
+#endif // ENABLE_WALLET
+

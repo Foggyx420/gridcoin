@@ -78,7 +78,7 @@ static const unsigned int MAX_BLOCKFILE_SIZE = 0x8000000; // 128 MiB
 static const unsigned int BLOCKFILE_CHUNK_SIZE = 0x1000000; // 16 MiB
 /** The pre-allocation chunk size for rev?????.dat files (since 0.8) */
 static const unsigned int UNDOFILE_CHUNK_SIZE = 0x100000; // 1 MiB
-
+//static const int COINBASE_MATURITY = 100;
 /** Maximum number of script-checking threads allowed */
 static const int MAX_SCRIPTCHECK_THREADS = 16;
 /** -par default (number of script-checking threads, 0 = auto) */
@@ -149,6 +149,8 @@ extern const std::string strMessageMagic;
 extern CWaitableCriticalSection csBestBlock;
 extern CConditionVariable cvBlockChange;
 extern bool fImporting;
+extern bool fProd;
+extern bool fDebugNN; 
 extern bool fReindex;
 extern int nScriptCheckThreads;
 extern bool fTxIndex;
@@ -161,8 +163,21 @@ extern size_t nCoinCacheUsage;
 extern CFeeRate minRelayTxFee;
 extern bool fAlerts;
 extern bool fEnableReplacement;
+extern int nStakeHashDrift;
+
+       
+extern int64_t nHPSTimerStart;
+extern int64_t nHashCounter;
+extern double dHashesPerSec;
+
+extern unsigned int nStakeMinAge;
+extern int64_t nLastCoinStakeSearchInterval;
+extern int64_t nLastCoinStakeSearchTime;
+extern int64_t nReserveBalance;
 
 extern std::map<uint256, int64_t> mapRejectedBlocks;
+extern std::map<unsigned int, unsigned int> mapHashedBlocks;
+extern std::set<std::pair<COutPoint, unsigned int> > setStakeSeen;
 
 static const int DIP0001_PROTOCOL_VERSION = 70208;
 extern std::atomic<bool> fDIP0001WasLockedIn;

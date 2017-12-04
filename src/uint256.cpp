@@ -121,7 +121,7 @@ static void inline HashFinal(uint32_t& a, uint32_t& b, uint32_t& c)
     b -= ((a << 14) | (a >> 18));
     c ^= b;
     c -= ((b << 24) | (b >> 8));
-}
+}  
 
 uint64_t uint256::GetHash(const uint256& salt) const
 {

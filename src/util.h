@@ -47,6 +47,7 @@ extern bool fMasterNode;
 extern bool fLiteMode;
 extern int nWalletBackups;
 
+
 static const bool DEFAULT_LOGTIMEMICROS  = false;
 static const bool DEFAULT_LOGIPS         = false;
 static const bool DEFAULT_LOGTIMESTAMPS  = true;
@@ -94,6 +95,11 @@ bool SetupNetworking();
 bool LogAcceptCategory(const char* category);
 /** Send a string to the log output */
 int LogPrintStr(const std::string &str);
+
+extern std::vector<std::string> Split(std::string s, std::string delim);
+extern double ConvertToDouble(std::string s, int place);
+
+
 
 #define LogPrintf(...) LogPrint(NULL, __VA_ARGS__)
 

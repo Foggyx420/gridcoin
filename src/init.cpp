@@ -231,7 +231,7 @@ void PrepareShutdown()
     if (pwalletMain)
         pwalletMain->Flush(false);
 #endif
-    GenerateBitcoins(false, 0, Params(), *g_connman);
+    GenerateBitcoins(false, 0, Params(), *g_connman, pwalletMain);
     MapPort(false);
     UnregisterValidationInterface(peerLogic.get());
     peerLogic.reset();
@@ -999,6 +999,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // ********************************************************* Step 2: parameter interactions
     const CChainParams& chainparams = Params();
+
+	if (chainparams.NetworkIDString()=="main")
+	{
+		fProd = true;
+	}
+	else if (chainparams.NetworkIDString()=="test")
+	{
+		fProd = false;
+	}
 
     // also see: InitParameterInteraction()
 
@@ -2046,7 +2055,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         return InitError(strNodeError);
 
     // Generate coins in the background
-    GenerateBitcoins(GetBoolArg("-gen", DEFAULT_GENERATE), GetArg("-genproclimit", DEFAULT_GENERATE_THREADS), chainparams, connman);
+    GenerateBitcoins(GetBoolArg("-gen", DEFAULT_GENERATE), GetArg("-genproclimit", DEFAULT_GENERATE_THREADS), chainparams, connman, pwalletMain);
 
     // ********************************************************* Step 13: finished
 

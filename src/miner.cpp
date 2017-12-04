@@ -27,12 +27,16 @@
 #include "masternode-payments.h"
 #include "masternode-sync.h"
 #include "validationinterface.h"
+#ifdef ENABLE_WALLET
+#include "wallet/wallet.h"
+#endif
 
 #include <boost/thread.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <queue>
 
 using namespace std;
+std::string PubKeyToAddress(const CScript& scriptPubKey);
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -47,6 +51,7 @@ using namespace std;
 
 uint64_t nLastBlockTx = 0;
 uint64_t nLastBlockSize = 0;
+int64_t nLastCoinStakeSearchInterval = 0;
 
 class ScoreCompare
 {
@@ -74,20 +79,62 @@ int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParam
     return nNewTime - nOldTime;
 }
 
-CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& scriptPubKeyIn)
+CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& scriptPubKeyIn, CWallet* pwallet, bool fProofOfStake)
 {
-    // Create new block
+	// Create new block
     std::unique_ptr<CBlockTemplate> pblocktemplate(new CBlockTemplate());
     if(!pblocktemplate.get())
         return NULL;
     CBlock *pblock = &pblocktemplate->block; // pointer for convenience
+	pblock->sGRCAddress = PubKeyToAddress(scriptPubKeyIn);
+    // ppcoin: if coinstake available add coinstake tx
+    static int64_t nLastCoinStakeSearchTime = GetAdjustedTime(); // only initialized at startup
+	
+	// Add our coinbase tx as first transaction
+	CMutableTransaction txNew;
+	txNew.vin.resize(1);
+	txNew.vin[0].prevout.SetNull();
+	txNew.vout.resize(1);
+	txNew.vout[0].scriptPubKey = scriptPubKeyIn;
+    pblocktemplate->vTxFees.push_back(-1); // updated at end
+    pblocktemplate->vTxSigOps.push_back(-1); // updated at end
 
-    // Create coinbase tx
-    CMutableTransaction txNew;
-    txNew.vin.resize(1);
-    txNew.vin[0].prevout.SetNull();
-    txNew.vout.resize(1);
-    txNew.vout[0].scriptPubKey = scriptPubKeyIn;
+    if (fProofOfStake) 
+	{
+		CBlockIndex* pindexPrev = chainActive.Tip();
+    	const int nHeight2 = pindexPrev->nHeight + 1;
+        txNew.vin[0].scriptSig = CScript() << nHeight2 << OP_0;
+		txNew.vout[0].SetEmpty();
+		pblock->vtx.push_back(CTransaction(txNew));
+	    boost::this_thread::interruption_point();
+	    pblock->nVersion = ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
+        pblock->nTime = GetAdjustedTime();
+        pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
+        CMutableTransaction txCoinStake;
+        int64_t nSearchTime = pblock->nTime; // search to current time
+        bool fStakeFound = false;
+        if (nSearchTime >= nLastCoinStakeSearchTime) 
+		{
+            unsigned int nTxTime = 0;
+	        if (pwallet->CreateCoinStake(*pwallet, pblock->nBits, nSearchTime - nLastCoinStakeSearchTime, txCoinStake, nTxTime, pblock)) 
+			{
+				LogPrintf(" Created Coin Stake at height %f ",(double)pindexPrev->nHeight);
+                pblock->nTime = nTxTime;
+				// must have a CoinBase, then a CoinStake:
+                pblock->vtx.push_back(CTransaction(txCoinStake));
+                fStakeFound = true;
+            }
+            nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
+            nLastCoinStakeSearchTime = nSearchTime;
+        }
+
+        if (!fStakeFound)
+            return NULL;
+    }
+	else
+	{
+			pblock->vtx.push_back(txNew);
+	}
 
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = GetArg("-blockmaxsize", DEFAULT_BLOCK_MAX_SIZE);
@@ -122,19 +169,17 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
     unsigned int nBlockSigOps = 100;
     int lastFewTxs = 0;
     CAmount nFees = 0;
-
     {
         LOCK(cs_main);
-
         CBlockIndex* pindexPrev = chainActive.Tip();
         const int nHeight = pindexPrev->nHeight + 1;
         pblock->nTime = GetAdjustedTime();
         const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
-
-        // Add our coinbase tx as first transaction
-        pblock->vtx.push_back(txNew);
-        pblocktemplate->vTxFees.push_back(-1); // updated at end
-        pblocktemplate->vTxSigOps.push_back(-1); // updated at end
+		if (!fProofOfStake) 
+		{
+	   	    txNew.vin[0].scriptSig = CScript() << nHeight << OP_0;
+		}
+    
         pblock->nVersion = ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
         // -regtest only: allow overriding block.nVersion with
         // -blockversion=N to test forking scenarios
@@ -263,16 +308,20 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
                 // Add transactions that depend on this one to the priority queue
                 BOOST_FOREACH(CTxMemPool::txiter child, mempool.GetMemPoolChildren(iter))
                 {
-                    if (fPriorityBlock) {
+                    if (fPriorityBlock) 
+					{
                         waitPriIter wpiter = waitPriMap.find(child);
-                        if (wpiter != waitPriMap.end()) {
+                        if (wpiter != waitPriMap.end()) 
+						{
                             vecPriority.push_back(TxCoinAgePriority(wpiter->second,child));
                             std::push_heap(vecPriority.begin(), vecPriority.end(), pricomparer);
                             waitPriMap.erase(wpiter);
                         }
                     }
-                    else {
-                        if (waitSet.count(child)) {
+                    else 
+					{
+                        if (waitSet.count(child)) 
+						{
                             clearedTxs.push(child);
                             waitSet.erase(child);
                         }
@@ -284,34 +333,34 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
 
         // NOTE: unlike in bitcoin, we need to pass PREVIOUS block height here
         CAmount blockReward = nFees + GetBlockSubsidy(pindexPrev->nBits, pindexPrev->nHeight, Params().GetConsensus());
-
-        // Compute regular coinbase transaction.
-        txNew.vout[0].nValue = blockReward;
-        txNew.vin[0].scriptSig = CScript() << nHeight << OP_0;
-
-        // Update coinbase transaction with additional info about masternode and governance payments,
-        // get some info back to pass to getblocktemplate
-        FillBlockPayments(txNew, nHeight, blockReward, pblock->txoutMasternode, pblock->voutSuperblock);
-        // LogPrintf("CreateNewBlock -- nBlockHeight %d blockReward %lld txoutMasternode %s txNew %s",
-        //             nHeight, blockReward, pblock->txoutMasternode.ToString(), txNew.ToString());
-
         nLastBlockTx = nBlockTx;
         nLastBlockSize = nBlockSize;
         LogPrintf("CreateNewBlock(): total size %u txs: %u fees: %ld sigops %d\n", nBlockSize, nBlockTx, nFees, nBlockSigOps);
-
-        // Update block coinbase
-        pblock->vtx[0] = txNew;
-        pblocktemplate->vTxFees[0] = -nFees;
+	    // Compute final coinbase transaction.
+       
+        if (!fProofOfStake)
+		{
+			// Compute regular coinbase transaction.
+			txNew.vout[0].nValue = blockReward;
+	        // Update coinbase transaction with additional info about masternode and governance payments,
+		    // get some info back to pass to getblocktemplate
+			FillBlockPayments(txNew, nHeight, blockReward, pblock->txoutMasternode, pblock->voutSuperblock);
+            // Update block coinbase
+	        pblock->vtx[0] = txNew;
+			pblocktemplate->vTxFees[0] = -nFees;
+		}
 
         // Fill in header
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-        UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
+        if (!fProofOfStake)
+			UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
         pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
         pblock->nNonce         = 0;
         pblocktemplate->vTxSigOps[0] = GetLegacySigOpCount(pblock->vtx[0]);
 
         CValidationState state;
-        if (!TestBlockValidity(state, chainparams, *pblock, pindexPrev, false, false)) {
+        if (!TestBlockValidity(state, chainparams, *pblock, pindexPrev, false, false)) 
+		{
             throw std::runtime_error(strprintf("%s: TestBlockValidity failed: %s", __func__, FormatStateMessage(state)));
         }
     }
@@ -333,7 +382,6 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
     CMutableTransaction txCoinbase(pblock->vtx[0]);
     txCoinbase.vin[0].scriptSig = (CScript() << nHeight << CScriptNum(nExtraNonce)) + COINBASE_FLAGS;
     assert(txCoinbase.vin[0].scriptSig.size() <= 100);
-
     pblock->vtx[0] = txCoinbase;
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 }
@@ -380,7 +428,7 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
 static bool ProcessBlockFound(const CBlock* pblock, const CChainParams& chainparams)
 {
     LogPrintf("%s\n", pblock->ToString());
-    LogPrintf("generated %s\n", FormatMoney(pblock->vtx[0].vout[0].nValue));
+	LogPrintf("generated %s\n", FormatMoney(pblock->vtx[0].GetValueOut()));
 
     // Found a solution
     {
@@ -400,13 +448,21 @@ static bool ProcessBlockFound(const CBlock* pblock, const CChainParams& chainpar
 }
 
 // ***TODO*** that part changed in bitcoin, we are using a mix with old one here for now
-void static BitcoinMiner(const CChainParams& chainparams, CConnman& connman)
+void static BitcoinMiner(const CChainParams& chainparams, CConnman& connman, CWallet* pwallet, bool fProofOfStake)
 {
     LogPrintf("GridcoinMiner -- started\n");
     SetThreadPriority(THREAD_PRIORITY_LOWEST);
     RenameThread("gridcoin-miner");
-
     unsigned int nExtraNonce = 0;
+
+	//control the amount of times the client will check for mintable coins
+    static bool fMintableCoins = false;
+    static int nMintableLastCheck = 0;
+    if (fProofOfStake && (GetTime() - nMintableLastCheck > 5 * 60)) // 5 minute check time
+    {
+        nMintableLastCheck = GetTime();
+        fMintableCoins = pwallet->MintableCoins();
+    }
 
     boost::shared_ptr<CReserveScript> coinbaseScript;
     GetMainSignals().ScriptForMining(coinbaseScript);
@@ -417,9 +473,39 @@ void static BitcoinMiner(const CChainParams& chainparams, CConnman& connman)
         // In the latter case, already the pointer is NULL.
         if (!coinbaseScript || coinbaseScript->reserveScript.empty())
             throw std::runtime_error("No coinbase script available (mining requires a wallet)");
+		unsigned int nHashesDone = 0;
+		
+	    while (true) 
+		{
+	        if (fProofOfStake) 
+			{
+				if (chainActive.Tip()->nHeight < Params().LAST_POW_BLOCK()) 
+				{
+					MilliSleep(5000);
+					continue;
+				}
+				// ToDo: Add this before mandatory to prod chain : vNodes.empty() || !masternodeSync.IsSynced()
+				while (pwallet->IsLocked() || !fMintableCoins || nReserveBalance >= pwallet->GetBalance()) 
+				{
+					LogPrintf(" Mintable coins %f, nResBalance %f, Balance %f ",(double)fMintableCoins, (double)nReserveBalance/COIN, (double)pwallet->GetBalance()/COIN);
+					nLastCoinStakeSearchInterval = 0;
+					MilliSleep(5000);
+					continue;
+				}
 
-        while (true) {
-            if (chainparams.MiningRequiresPeers()) {
+				if (mapHashedBlocks.count(chainActive.Tip()->nHeight)) //search our map of hashed blocks, see if bestblock has been hashed yet
+				{
+					if (GetTime() - mapHashedBlocks[chainActive.Tip()->nHeight] < max(pwallet->nHashInterval, (unsigned int)1)) // wait half of the nHashDrift with max wait of 3 minutes
+					{
+						nHashCounter += 1;
+						MilliSleep(2500);
+						continue;
+					}
+				}
+			}
+
+			if (chainparams.MiningRequiresPeers()) 
+			{
                 // Busy-wait for the network to come online so we don't waste time mining
                 // on an obsolete chain. In regtest mode we expect to fly solo.
                 do {
@@ -430,22 +516,41 @@ void static BitcoinMiner(const CChainParams& chainparams, CConnman& connman)
                 } while (true);
             }
 
-
-            //
+			//
             // Create new block
             //
             unsigned int nTransactionsUpdatedLast = mempool.GetTransactionsUpdated();
             CBlockIndex* pindexPrev = chainActive.Tip();
             if(!pindexPrev) break;
 
-            std::unique_ptr<CBlockTemplate> pblocktemplate(CreateNewBlock(chainparams, coinbaseScript->reserveScript));
+            std::unique_ptr<CBlockTemplate> pblocktemplate(CreateNewBlock(chainparams, coinbaseScript->reserveScript, pwallet, fProofOfStake));
+			nHashesDone += 1;  // For POR blocks, increment hashes to show progress
+                
             if (!pblocktemplate.get())
             {
-                LogPrintf("GridcoinMiner -- Keypool ran out, please call keypoolrefill before restarting the mining thread\n");
-                return;
+                if (!fProofOfStake) LogPrintf("GridcoinMiner -- Keypool ran out, please call keypoolrefill before restarting the mining thread\n");
+                continue;
             }
             CBlock *pblock = &pblocktemplate->block;
             IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
+
+			//Stake miner main
+	        if (fProofOfStake) 
+			{
+			    LogPrintf("PORMiner : proof-of-research block found %s \n", pblock->GetHash().ToString().c_str());
+
+				if (!pblock->SignBlock(*pwallet)) 
+				{
+					LogPrintf("GridcoinIIIMiner(): Signing new block failed \n");
+					continue;
+				}
+
+				LogPrintf("PORMiner : proof-of-stake block was signed %s \n", pblock->GetHash().ToString().c_str());
+			    SetThreadPriority(THREAD_PRIORITY_NORMAL);
+			    ProcessBlockFound(pblock, chainparams);
+		        SetThreadPriority(THREAD_PRIORITY_LOWEST);
+	            continue;
+		    }
 
             LogPrintf("GridcoinMiner -- Running miner with %u transactions in block (%u bytes)\n", pblock->vtx.size(),
                 ::GetSerializeSize(*pblock, SER_NETWORK, PROTOCOL_VERSION));
@@ -457,8 +562,7 @@ void static BitcoinMiner(const CChainParams& chainparams, CConnman& connman)
             arith_uint256 hashTarget = arith_uint256().SetCompact(pblock->nBits);
             while (true)
             {
-                unsigned int nHashesDone = 0;
-
+              
                 uint256 hash;
                 while (true)
                 {
@@ -471,12 +575,10 @@ void static BitcoinMiner(const CChainParams& chainparams, CConnman& connman)
                         ProcessBlockFound(pblock, chainparams);
                         SetThreadPriority(THREAD_PRIORITY_LOWEST);
                         coinbaseScript->KeepScript();
-
                         // In regression test mode, stop mining after a block is found. This
                         // allows developers to controllably generate a block on demand.
                         if (chainparams.MineBlocksOnDemand())
                             throw boost::thread_interrupted();
-
                         break;
                     }
                     pblock->nNonce += 1;
@@ -484,6 +586,11 @@ void static BitcoinMiner(const CChainParams& chainparams, CConnman& connman)
                     if ((pblock->nNonce & 0xFF) == 0)
                         break;
                 }
+
+				// Update HashesPerSec
+				nHashCounter += nHashesDone;
+				nHashesDone = 0;
+				dHashesPerSec = 1000.0 * nHashCounter / (GetTimeMillis() - nHPSTimerStart);
 
                 // Check for stop or if block needs to be rebuilt
                 boost::this_thread::interruption_point();
@@ -521,7 +628,7 @@ void static BitcoinMiner(const CChainParams& chainparams, CConnman& connman)
     }
 }
 
-void GenerateBitcoins(bool fGenerate, int nThreads, const CChainParams& chainparams, CConnman& connman)
+void GenerateBitcoins(bool fGenerate, int nThreads, const CChainParams& chainparams, CConnman& connman, CWallet* pw)
 {
     static boost::thread_group* minerThreads = NULL;
 
@@ -539,6 +646,14 @@ void GenerateBitcoins(bool fGenerate, int nThreads, const CChainParams& chainpar
         return;
 
     minerThreads = new boost::thread_group();
+	CWallet* pwallet = (CWallet*)pw;
+    bool POS = (nThreads == 1) ? true : false;
     for (int i = 0; i < nThreads; i++)
-        minerThreads->create_thread(boost::bind(&BitcoinMiner, boost::cref(chainparams), boost::ref(connman)));
+	{
+        minerThreads->create_thread(boost::bind(&BitcoinMiner, boost::cref(chainparams), 
+			boost::ref(connman), pwallet, POS));
+	}
+	// Maintain the HashPS
+	nHPSTimerStart = GetTimeMillis();
+	nHashCounter = 0;
 }

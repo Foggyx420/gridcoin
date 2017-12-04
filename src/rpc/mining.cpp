@@ -35,6 +35,7 @@
 #include <univalue.h>
 
 using namespace std;
+std::string TimestampToHRDate(double dtm);
 
 /**
  * Return average network hashes per second based on the last 'lookup' blocks,
@@ -164,7 +165,7 @@ UniValue generate(const UniValue& params, bool fHelp)
     UniValue blockHashes(UniValue::VARR);
     while (nHeight < nHeightEnd)
     {
-        std::unique_ptr<CBlockTemplate> pblocktemplate(CreateNewBlock(Params(), coinbaseScript->reserveScript));
+        std::unique_ptr<CBlockTemplate> pblocktemplate(CreateNewBlock(Params(), coinbaseScript->reserveScript,pwalletMain,false));
         if (!pblocktemplate.get())
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Couldn't create new block");
         CBlock *pblock = &pblocktemplate->block;
@@ -172,7 +173,10 @@ UniValue generate(const UniValue& params, bool fHelp)
             LOCK(cs_main);
             IncrementExtraNonce(pblock, chainActive.Tip(), nExtraNonce);
         }
-        while (!CheckProofOfWork(pblock->GetHash(), pblock->nBits, Params().GetConsensus())) {
+		CBlockIndex* pindexPrev = mapBlockIndex[pblock->hashPrevBlock];
+    
+        while (!CheckProofOfWork(pblock->GetHash(), pblock->nBits, Params().GetConsensus(), pblock->sGRCAddress, pindexPrev)) 
+		{
             // Yes, there is a chance every nonce could fail to satisfy the -regtest
             // target -- 1 in 2^(2^32). That ain't gonna happen.
             ++pblock->nNonce;
@@ -227,7 +231,7 @@ UniValue setgenerate(const UniValue& params, bool fHelp)
 
     mapArgs["-gen"] = (fGenerate ? "1" : "0");
     mapArgs ["-genproclimit"] = itostr(nGenProcLimit);
-    GenerateBitcoins(fGenerate, nGenProcLimit, Params(), *g_connman);
+    GenerateBitcoins(fGenerate, nGenProcLimit, Params(), *g_connman, pwalletMain);
 
     return NullUniValue;
 }
@@ -267,10 +271,15 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.push_back(Pair("errors",           GetWarnings("statusbar")));
     obj.push_back(Pair("genproclimit",     (int)GetArg("-genproclimit", DEFAULT_GENERATE_THREADS)));
     obj.push_back(Pair("networkhashps",    getnetworkhashps(params, false)));
+	obj.push_back(Pair("hashps",           dHashesPerSec));
+	obj.push_back(Pair("minerstarttime",   TimestampToHRDate(nHPSTimerStart/1000)));
+	obj.push_back(Pair("hashesdone",       nHashCounter));
+
     obj.push_back(Pair("pooledtx",         (uint64_t)mempool.size()));
     obj.push_back(Pair("testnet",          Params().TestnetToBeDeprecatedFieldRPC()));
     obj.push_back(Pair("chain",            Params().NetworkIDString()));
     obj.push_back(Pair("generate",         getgenerate(params, false)));
+  
     return obj;
 }
 
@@ -571,7 +580,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
             pblocktemplate = NULL;
         }
         CScript scriptDummy = CScript() << OP_TRUE;
-        pblocktemplate = CreateNewBlock(Params(), scriptDummy);
+        pblocktemplate = CreateNewBlock(Params(), scriptDummy, pwalletMain, false);
         if (!pblocktemplate)
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
 

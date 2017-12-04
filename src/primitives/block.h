@@ -7,6 +7,7 @@
 #define BITCOIN_PRIMITIVES_BLOCK_H
 
 #include "primitives/transaction.h"
+#include "keystore.h"
 #include "serialize.h"
 #include "uint256.h"
 
@@ -21,12 +22,15 @@ class CBlockHeader
 {
 public:
     // header
+	static const int32_t CURRENT_VERSION=4;
     int32_t nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
     uint32_t nTime;
     uint32_t nBits;
     uint32_t nNonce;
+	uint256 nAccumulatorCheckpoint;
+	std::string sGRCAddress;
 
     CBlockHeader()
     {
@@ -44,6 +48,9 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
+	    READWRITE(nAccumulatorCheckpoint);
+		READWRITE(LIMITED_STRING(sGRCAddress,255));
+	
     }
 
     void SetNull()
@@ -54,6 +61,8 @@ public:
         nTime = 0;
         nBits = 0;
         nNonce = 0;
+	    nAccumulatorCheckpoint = uint256S("0x0");
+   		sGRCAddress="";
     }
 
     bool IsNull() const
@@ -76,10 +85,14 @@ public:
     // network and disk
     std::vector<CTransaction> vtx;
 
+    // ppcoin: block signature - signed by one of the coin base txout[N]'s owner
+    std::vector<unsigned char> vchBlockSig;
+
     // memory only
     mutable CTxOut txoutMasternode; // masternode payment
     mutable std::vector<CTxOut> voutSuperblock; // superblock payment
     mutable bool fChecked;
+	mutable std::vector<uint256> vMerkleTree;
 
     CBlock()
     {
@@ -95,17 +108,23 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) 
+	{
         READWRITE(*(CBlockHeader*)this);
         READWRITE(vtx);
+		if(vtx.size() > 1 && vtx[1].IsCoinStake())
+			READWRITE(vchBlockSig);
     }
 
+    
     void SetNull()
     {
         CBlockHeader::SetNull();
         vtx.clear();
         txoutMasternode = CTxOut();
         voutSuperblock.clear();
+        vchBlockSig.clear();
+	    vMerkleTree.clear();
         fChecked = false;
     }
 
@@ -118,10 +137,40 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+	    block.nAccumulatorCheckpoint = nAccumulatorCheckpoint;
+		block.sGRCAddress    = sGRCAddress;
         return block;
     }
 
+	// ppcoin: two types of block: proof-of-work or proof-of-stake
+    bool IsProofOfStake() const
+    {
+        return (vtx.size() > 1 && vtx[1].IsCoinStake());
+    }
+
+    bool IsProofOfWork() const
+    {
+        return !IsProofOfStake();
+    }
+    bool SignBlock(const CKeyStore& keystore);
+    bool CheckBlockSignature() const;
+    std::pair<COutPoint, unsigned int> GetProofOfStake() const
+    {
+        return IsProofOfStake()? std::make_pair(vtx[1].vin[0].prevout, nTime) : std::make_pair(COutPoint(), (unsigned int)0);
+    }
+
+    // Build the in-memory merkle tree for this block and return the merkle root.
+    // If non-NULL, *mutated is set to whether mutation was detected in the merkle
+    // tree (a duplication of transactions in the block leading to an identical
+    // merkle root).
+    uint256 BuildMerkleTree(bool* mutated = NULL) const;
+
+    std::vector<uint256> GetMerkleBranch(int nIndex) const;
+    static uint256 CheckMerkleBranch(uint256 hash, const std::vector<uint256>& vMerkleBranch, int nIndex);
+
     std::string ToString() const;
+    void print() const;
+
 };
 
 

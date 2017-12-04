@@ -61,6 +61,31 @@ const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
     return pindex;
 }
 
+
+uint256 CBlockIndex::GetBlockTrust() const
+{
+    uint256 bnTarget;
+	bnTarget = ArithToUint256(arith_uint256().SetCompact(nBits));
+    if (UintToArith256(bnTarget) <= 0)
+        return uint256S("0x0");
+
+    if (IsProofOfStake()) 
+	{
+        // Return trust score as usual
+        return ArithToUint256((UintToArith256(uint256S("0x1")) << 256) / (UintToArith256(bnTarget) + 1));
+    }
+	else 
+	{
+        // Calculate work amount for block
+		arith_uint256 aPowTrust = (UintToArith256(uint256S("0x0")) >> 20);
+		aPowTrust /= (UintToArith256(bnTarget) + 1);
+		uint256 bnPoWTrust = ArithToUint256(aPowTrust);	
+		uint256 out = (UintToArith256(bnPoWTrust) > 1) ? bnPoWTrust : uint256S("0x1");
+		return out;
+    }
+}
+
+
 /** Turn the lowest '1' bit in the binary representation of a number into a '0'. */
 int static inline InvertLowestOne(int n) { return n & (n - 1); }
 

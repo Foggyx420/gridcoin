@@ -13,6 +13,7 @@
 #include "tinyformat.h"
 #include "ui_interface.h"
 #include "util.h"
+#include "kernel.h"
 #include "utilstrencodings.h"
 #include "validationinterface.h"
 #include "wallet/crypter.h"
@@ -105,7 +106,8 @@ enum AvailableCoinsType
     ONLY_NOT1000IFMN = 3,
     ONLY_NONDENOMINATED_NOT1000IFMN = 4,
     ONLY_1000 = 5, // find masternode outputs including locked ones (use with caution)
-    ONLY_PRIVATESEND_COLLATERAL = 6
+    ONLY_PRIVATESEND_COLLATERAL = 6,
+	STAKABLE_COINS = 6                          // UTXO's that are valid for staking
 };
 
 struct CompactTallyItem
@@ -234,7 +236,7 @@ public:
 
     void Init()
     {
-        hashBlock = uint256();
+        hashBlock = uint256S("0x0");
         nIndex = -1;
     }
 
@@ -669,7 +671,10 @@ public:
      *      fFileBacked (immutable after instantiation)
      *      strWalletFile (immutable after instantiation)
      */
+	bool MintableCoins();
+    
     mutable CCriticalSection cs_wallet;
+	bool SelectStakeCoins(std::set<std::pair<const CWalletTx*, unsigned int> >& setCoins, CAmount nTargetAmount) const;
 
     bool fFileBacked;
     const std::string strWalletFile;
@@ -697,6 +702,16 @@ public:
     typedef std::map<unsigned int, CMasterKey> MasterKeyMap;
     MasterKeyMap mapMasterKeys;
     unsigned int nMasterKeyMaxID;
+
+    // Stake Settings
+    unsigned int nHashInterval;
+    uint64_t nStakeSplitThreshold;
+    int nStakeSetUpdateTime;
+
+	//Auto Combine Inputs
+	bool fCombineDust;
+    CAmount nAutoCombineThreshold;
+
 
     CWallet()
     {
@@ -733,6 +748,17 @@ public:
         fAnonymizableTallyCachedNonDenom = false;
         vecAnonymizableTallyCached.clear();
         vecAnonymizableTallyCachedNonDenom.clear();
+
+		// Stake Settings
+        nStakeSplitThreshold = 2000;
+        nHashInterval = 22;
+        nStakeSetUpdateTime = 300; // 5 minutes
+
+		
+        //Auto Combine Dust
+        fCombineDust = false;
+        nAutoCombineThreshold = 0;
+
     }
 
     std::map<uint256, CWalletTx> mapWallet;
@@ -903,6 +929,7 @@ public:
 
     bool CreateCollateralTransaction(CMutableTransaction& txCollateral, std::string& strReason);
     bool ConvertList(std::vector<CTxIn> vecTxIn, std::vector<CAmount>& vecAmounts);
+	bool CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, CMutableTransaction& txNew, unsigned int& nTxNewTime, CBlock *blk);
 
     bool AddAccountingEntry(const CAccountingEntry&, CWalletDB & pwalletdb);
 

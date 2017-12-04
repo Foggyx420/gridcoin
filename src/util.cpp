@@ -385,6 +385,62 @@ int LogPrintStr(const std::string &str)
     return ret;
 }
 
+
+
+std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
+{
+  size_t pos = 0;
+  while((pos = str.find(oldStr, pos)) != std::string::npos){
+     str.replace(pos, oldStr.length(), newStr);
+     pos += newStr.length();
+  }
+  return str;
+}
+
+
+double RoundDecimal(double d, int place)
+{
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(place) << d ;
+	double r = boost::lexical_cast<double>(ss.str());
+	return r;
+}
+
+double ConvertToDouble(std::string s, int place)
+{
+	if (s=="") s="0";
+	s = strReplace(s,"\r","");
+	s = strReplace(s,"\n","");
+	s = strReplace(s,"a","");
+	s = strReplace(s,"a","");
+	s = strReplace(s,"b","");
+	s = strReplace(s,"c","");
+	s = strReplace(s,"d","");
+	s = strReplace(s,"e","");
+	s = strReplace(s,"f","");
+    double r = boost::lexical_cast<double>(s);
+	double d = RoundDecimal(r, place);
+	return d;
+}
+
+
+std::vector<std::string> Split(std::string s, std::string delim)
+{
+	size_t pos = 0;
+	std::string token;
+	std::vector<std::string> elems;
+	while ((pos = s.find(delim)) != std::string::npos)
+	{
+		token = s.substr(0, pos);
+		elems.push_back(token);
+		s.erase(0, pos + delim.length());
+	}
+	elems.push_back(s);
+	return elems;
+}
+
+
+
 /** Interpret string as boolean, for argument parsing */
 static bool InterpretBool(const std::string& strValue)
 {

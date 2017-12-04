@@ -122,6 +122,7 @@ BITCOIN_CORE_H = \
   httprpc.h \
   httpserver.h \
   init.h \
+  kernel.h \
   instantx.h \
   key.h \
   keepass.h \
@@ -291,6 +292,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/db.cpp \
   wallet/rpcdump.cpp \
   wallet/rpcwallet.cpp \
+  kernel.cpp \
   wallet/wallet.cpp \
   wallet/wallet_ismine.cpp \
   wallet/walletdb.cpp \
@@ -322,7 +324,7 @@ crypto_libbitcoin_crypto_a_SOURCES += \
   crypto/bmw.c \
   crypto/cubehash.c \
   crypto/echo.c \
-  crypto/groestl.c \
+  crypto/gridcoin.c \
   crypto/jh.c \
   crypto/keccak.c \
   crypto/luffa.c \
@@ -333,7 +335,7 @@ crypto_libbitcoin_crypto_a_SOURCES += \
   crypto/sph_bmw.h \
   crypto/sph_cubehash.h \
   crypto/sph_echo.h \
-  crypto/sph_groestl.h \
+  crypto/sph_gridcoin.h \
   crypto/sph_jh.h \
   crypto/sph_keccak.h \
   crypto/sph_luffa.h \

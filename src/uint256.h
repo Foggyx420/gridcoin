@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2015 The Bitcoin Core developers
-// Copyright (c) 2014-2017 The Gridcoin Core developers
+// Copyright (c) 2014-2017 The Däsh Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -43,6 +43,15 @@ public:
         memset(data, 0, sizeof(data));
     }
 
+    base_blob(uint64_t b)
+    {
+        data[0] = (unsigned int)b;
+        data[1] = (unsigned int)(b >> 32);
+        for (int i = 2; i < WIDTH; i++)
+            data[i] = 0;
+    }
+
+
     friend inline bool operator==(const base_blob& a, const base_blob& b) { return memcmp(a.data, b.data, sizeof(a.data)) == 0; }
     friend inline bool operator!=(const base_blob& a, const base_blob& b) { return memcmp(a.data, b.data, sizeof(a.data)) != 0; }
     friend inline bool operator<(const base_blob& a, const base_blob& b) { return memcmp(a.data, b.data, sizeof(a.data)) < 0; }
@@ -61,6 +70,17 @@ public:
     {
         return &data[WIDTH];
     }
+
+	uint64_t Get64(int n = 0) const
+    {
+        return data[2 * n] | (uint64_t)data[2 * n + 1] << 32;
+    }
+
+    uint32_t Get32(int n = 0) const
+    {
+        return data[2 * n];
+    }
+   
 
     const unsigned char* begin() const
     {
@@ -126,7 +146,7 @@ public:
     {
         return ReadLE64(data);
     }
-
+	 
     /** A more secure, salted hash function.
      * @note This hash is not stable between little and big endian.
      */

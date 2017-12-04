@@ -4,15 +4,15 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "pow.h"
-
 #include "arith_uint256.h"
 #include "chain.h"
 #include "chainparams.h"
 #include "primitives/block.h"
 #include "uint256.h"
 #include "util.h"
-
 #include <math.h>
+
+arith_uint256 CalculatePORTargetHash(arith_uint256 bnTarget, std::string sGRCAddress, const CBlockIndex* pindexPrev);
 
 unsigned int static KimotoGravityWell(const CBlockIndex* pindexLast, const Consensus::Params& params) {
     const CBlockIndex *BlockLastSolved = pindexLast;
@@ -174,14 +174,13 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     unsigned int retarget = DIFF_DGW;
 
     // mainnet/regtest share a configuration
-    if (Params().NetworkIDString() == CBaseChainParams::MAIN || Params().NetworkIDString() == CBaseChainParams::REGTEST) {
-        if (pindexLast->nHeight + 1 >= 34140) retarget = DIFF_DGW;
-        else if (pindexLast->nHeight + 1 >= 15200) retarget = DIFF_KGW;
-        else retarget = DIFF_BTC;
-    // testnet -- we want a lot of coins in existance early on
-    } else {
-        if (pindexLast->nHeight + 1 >= 4001) retarget = DIFF_DGW;
-        else retarget = DIFF_BTC;
+    if (Params().NetworkIDString() == CBaseChainParams::MAIN || Params().NetworkIDString() == CBaseChainParams::REGTEST) 
+	{
+        retarget = DIFF_DGW;
+    }
+	else 
+	{
+        retarget = DIFF_DGW;
     }
 
     // Bitcoin style retargeting
@@ -235,21 +234,28 @@ unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nF
     return bnNew.GetCompact();
 }
 
-bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params)
+bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params, std::string sGRCAddress, const CBlockIndex* pindexPrev)
 {
     bool fNegative;
     bool fOverflow;
     arith_uint256 bnTarget;
+
 
     bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
 
     // Check range
     if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit))
         return error("CheckProofOfWork(): nBits below minimum work");
-
-    // Check proof of work matches claimed amount
+	
+    // Check that proof of age exceeds the bar
     if (UintToArith256(hash) > bnTarget)
-        return error("CheckProofOfWork(): hash doesn't match nBits");
+	{
+		uint256 uTarget = ArithToUint256(bnTarget);
+		uint256 uNewTarget = ArithToUint256(bnTarget);
+        return error("CheckProofOfWork(): High Hash - BlockIndex %s, Original Hash %s, Adjusted Hash %s, Hash %s", 
+			pindexPrev->GetBlockHash().GetHex().c_str(), 
+			uTarget.GetHex().c_str(), uNewTarget.GetHex().c_str(), hash.GetHex().c_str());
+	}
 
     return true;
 }
